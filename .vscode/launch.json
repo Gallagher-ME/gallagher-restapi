@@ -1,0 +1,27 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Gallagher REST api",
+      "type": "python",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "module": "gallagher_restapi",
+      "args": ["E2F5-F3EC-3F91-8DD8-AE52-0FE9-4B4F-26D5", "94.205.240.142"],
+      "justMyCode": true,
+      "stopOnEntry": false,
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Gallagher REST api (debug)",
+      "type": "python",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "module": "gallagher_restapi",
+      "args": ["E2F5-F3EC-3F91-8DD8-AE52-0FE9-4B4F-26D5", "94.205.240.142", "-D"],
+      "justMyCode": true,
+      "stopOnEntry": false,
+      "console": "integratedTerminal",
+    }
+  ]
+}
