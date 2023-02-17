@@ -1,8 +1,10 @@
 """Gallagher item models."""
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
+
+import pytz
 
 
 class FTItemReference:
@@ -100,12 +102,12 @@ class FTAccessGroupMembership(FTItemReference):
         self.status = FTStatus(kwargs["status"])
         self.access_group = FTLinkItem(kwargs["accessGroup"])
         if active_from := kwargs.get("from"):
-            self.active_from = datetime.fromisoformat(active_from[:-1]).astimezone(
-                timezone.utc
+            self.active_from = datetime.fromisoformat(active_from[:-1]).replace(
+                tzinfo=pytz.utc
             )
         if active_until := kwargs.get("until"):
-            self.active_until = datetime.fromisoformat(active_until[:-1]).astimezone(
-                timezone.utc
+            self.active_until = datetime.fromisoformat(active_until[:-1]).replace(
+                tzinfo=pytz.utc
             )
 
 
@@ -123,12 +125,12 @@ class FTCardholderCard(FTItemReference):
         if access_group := kwargs.get("accessGroups"):
             self.access_group = FTLinkItem(access_group)
         if active_from := kwargs.get("from"):
-            self.active_from = datetime.fromisoformat(active_from[:-1]).astimezone(
-                timezone.utc
+            self.active_from = datetime.fromisoformat(active_from[:-1]).replace(
+                tzinfo=pytz.utc
             )
         if active_until := kwargs.get("until"):
-            self.active_until = datetime.fromisoformat(active_until[:-1]).astimezone(
-                timezone.utc
+            self.active_until = datetime.fromisoformat(active_until[:-1]).replace(
+                tzinfo=pytz.utc
             )
 
 
@@ -176,7 +178,7 @@ FTCARDHOLDER_FIELDS: tuple[FTCardholderField, ...] = (
     FTCardholderField(
         key="last_successful_access_time",
         name="lastSuccessfulAccessTime",
-        value=lambda val: datetime.fromisoformat(val[:-1]).astimezone(timezone.utc),
+        value=lambda val: datetime.fromisoformat(val[:-1]).replace(tzinfo=pytz.utc),
     ),
     FTCardholderField(
         key="last_successful_access_zone",
@@ -244,7 +246,7 @@ FTCARDHOLDER_FIELDS: tuple[FTCardholderField, ...] = (
     FTCardholderField(
         key="last_printed_or_encodedTime",
         name="lastPrintedOrEncodedTime",
-        value=lambda val: datetime.fromisoformat(val[:-1]).astimezone(timezone.utc),
+        value=lambda val: datetime.fromisoformat(val[:-1]).replace(tzinfo=pytz.utc),
     ),
     FTCardholderField(
         key="last_printed_or_encoded_issue_level", name="lastPrintedOrEncodedIssueLevel"
@@ -361,7 +363,7 @@ EVENT_FIELDS: tuple[EventField, ...] = (
     EventField(
         key="time",
         name="time",
-        value=lambda val: datetime.fromisoformat(val[:-1]).astimezone(timezone.utc),
+        value=lambda val: datetime.fromisoformat(val[:-1]).replace(tzinfo=pytz.utc),
     ),
     EventField(key="occurrences", name="occurrences"),
     EventField(key="priority", name="priority"),
@@ -394,7 +396,7 @@ EVENT_FIELDS: tuple[EventField, ...] = (
     EventField(
         key="last_occurrence_time",
         name="lastOccurrenceTime",
-        value=lambda val: datetime.fromisoformat(val[:-1]).astimezone(timezone.utc),
+        value=lambda val: datetime.fromisoformat(val[:-1]).replace(tzinfo=pytz.utc),
     ),
     EventField(key="previous", name="previous", value=lambda val: FTItemReference(val)),
     EventField(key="next", name="next", value=lambda val: FTItemReference(val)),
