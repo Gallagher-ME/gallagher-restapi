@@ -1,18 +1,6 @@
 {
-  "cSpell.words": [
-    "authorised",
-    "FTCARDHOLDER",
-    "ftitem",
-    "httpx",
-    "pdfs",
-    "pdfvalue",
-    "Rami",
-    "redactions",
-    "restapi",
-    "usercode",
-    "xmlrpclib"
-  ],
   "python.linting.pylintEnabled": false,
   "python.linting.mypyEnabled": true,
-  "python.linting.enabled": true
+  "python.linting.enabled": true,
+  "editor.formatOnSave": true
 }
