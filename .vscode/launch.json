@@ -7,8 +7,7 @@
       "request": "launch",
       "cwd": "${workspaceFolder}",
       "module": "gallagher_restapi",
-      "args": ["${input:api_key}", "${input:host}"],
-      "justMyCode": true,
+      "envFile": "${workspaceFolder}/.env",
       "stopOnEntry": false,
       "console": "integratedTerminal"
     },
@@ -18,22 +17,10 @@
       "request": "launch",
       "cwd": "${workspaceFolder}",
       "module": "gallagher_restapi",
-      "args": ["${input:api_key}", "${input:host}", "-D"],
-      "justMyCode": true,
+      "envFile": "${workspaceFolder}/.env",
+      "args": ["-D"],
       "stopOnEntry": false,
-      "console": "integratedTerminal",
-    }
-  ],
-  "inputs": [
-    {
-      "type": "promptString",
-      "id": "api_key",
-      "description": "Enter API Key.",
-    },
-    {
-      "type": "promptString",
-      "id": "host",
-      "description": "Enter Gallagher host.",
+      "console": "integratedTerminal"
     }
   ]
 }

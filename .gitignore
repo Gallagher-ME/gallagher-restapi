@@ -2,3 +2,4 @@
 dist
 extra
 __pycache__
+.env
