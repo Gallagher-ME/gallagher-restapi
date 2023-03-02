@@ -18,11 +18,9 @@
       "cwd": "${workspaceFolder}",
       "module": "gallagher_restapi",
       "envFile": "${workspaceFolder}/.env",
-      "args": [
-        "-D"
-      ],
+      "args": ["-D"],
       "stopOnEntry": false,
-      "console": "integratedTerminal",
+      "console": "integratedTerminal"
     }
   ]
 }
