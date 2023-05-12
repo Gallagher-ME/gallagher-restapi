@@ -62,14 +62,14 @@ class FTApiFeatures:
             raise ValueError(f"{main_feature} is not a valid feature")
         if sub_feature and sub_feature not in attr:
             raise ValueError(f"{sub_feature} is not found in {main_feature}")
-        return attr[main_feature or sub_feature]["href"]
+        return attr[sub_feature or main_feature]["href"]
 
 
 @dataclass
 class FTItemReference:
     """FTItem reference class."""
 
-    href: str = field(default_factory=str)
+    href: str = ""
 
 
 @dataclass
@@ -93,9 +93,9 @@ class FTItem:
     """FTItem class."""
 
     id: str
-    name: str
-    href: str = field(default_factory=str)
-    type: dict = field(default_factory=dict)
+    name: str = ""
+    href: str = ""
+    type: dict = ""
 
 
 @dataclass
@@ -103,7 +103,7 @@ class FTLinkItem:
     """FTLinkItem class."""
 
     name: str
-    href: str = field(default_factory=str)
+    href: str = ""
 
 
 @dataclass
@@ -114,7 +114,7 @@ class FTAccessGroupMembership:
     access_group: FTLinkItem = field(init=False)
     active_from: datetime = field(init=False)
     active_until: datetime = field(init=False)
-    href: str = field(default_factory=str)
+    href: str = ""
 
     @property
     def as_dict(self) -> dict[str, Any]:
@@ -236,7 +236,7 @@ class FTPersonalDataDefinition:
     id: str
     name: str
     type: str
-    href: str = field(default_factory=str)
+    href: str = ""
 
 
 @dataclass
@@ -307,7 +307,7 @@ FTCARDHOLDER_FIELDS: tuple[FTCardholderField, ...] = (
         from_dict=lambda val: FTLinkItem(**val),
     ),
     FTCardholderField(name="serverDisplayName"),
-    FTCardholderField(name="division", from_dict=lambda val: FTItemReference(**val)),
+    FTCardholderField(name="division", from_dict=lambda val: FTItem(**val)),
     FTCardholderField(name="disableCipherPad"),
     FTCardholderField(name="usercode"),
     FTCardholderField(name="operatorLoginEnabled"),
@@ -447,7 +447,7 @@ class FTAlarm:
     """FTAlarm summary class"""
 
     state: str
-    href: str = field(default_factory=str)
+    href: str = ""
 
 
 @dataclass
@@ -474,7 +474,7 @@ class FTEventGroup:
 
     id: str
     name: str
-    href: str = field(default_factory=str)
+    href: str = ""
     event_types: list[FTItem] = field(init=False)
 
     @classmethod

@@ -106,7 +106,7 @@ class BaseClient:
         """Get FTItem types."""
         item_types: list[str] = []
         response = await self._async_request(
-            "GET", self.api_features.href("items/item_types")
+            "GET", self.api_features.href("items/itemTypes")
         )
         if response.get("itemTypes"):
             item_types = [

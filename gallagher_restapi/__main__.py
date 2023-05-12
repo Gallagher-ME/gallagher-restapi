@@ -28,13 +28,13 @@ async def main(host: str, port: int, api_key: str) -> None:
                 cardholder_client.item_types["Division"], "ICAD"
             ):
                 _LOGGER.info(divisions[0])
-                new_cardholder = FTCardholder(
-                    first_name="Rami",
-                    last_name="1",
-                    division=FTItemReference(href=divisions[0].href),
-                )
-                if await cardholder_client.create_cardholder(new_cardholder):
-                    _LOGGER.info("New cardholder created successfully.")
+                # new_cardholder = FTCardholder(
+                #     firstName="Rami",
+                #     lastName="1",
+                #     division=FTItemReference(href=divisions[0].href),
+                # )
+                # if await cardholder_client.create_cardholder(new_cardholder):
+                #     _LOGGER.info("New cardholder created successfully.")
     except gallagher_restapi.GllApiError as err:
         _LOGGER.error(err)
     try:
@@ -46,7 +46,7 @@ async def main(host: str, port: int, api_key: str) -> None:
                 httpx_client=httpx_client,
             )
             await cardholder_client.authenticate()
-            if cardholders := await cardholder_client.get_cardholder():
+            if cardholders := await cardholder_client.get_cardholder(detailed=True):
                 _LOGGER.info(
                     "Successfully connected to Gallagher server"
                     "and retrieved %s cardholders",
