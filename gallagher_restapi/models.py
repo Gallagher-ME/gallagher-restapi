@@ -69,7 +69,7 @@ class FTApiFeatures:
 class FTItemReference:
     """FTItem reference class."""
 
-    href: str = ""
+    href: str
 
 
 @dataclass
@@ -95,7 +95,7 @@ class FTItem:
     id: str
     name: str = ""
     href: str = ""
-    type: dict = ""
+    type: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -167,8 +167,8 @@ class FTCardholderCard:
 
     type: FTLinkItem | FTItem
     number: str = field(init=False)
-    card_serial_number: str = field(init=False)
-    issue_level: int = field(init=False)
+    cardSerialNumber: str = field(init=False)
+    issueLevel: int = field(init=False)
     status: FTStatus = field(init=False)
     active_from: datetime = field(init=False)
     active_until: datetime = field(init=False)
@@ -179,8 +179,8 @@ class FTCardholderCard:
         _dict: dict[str, Any] = {"type": {"href": self.type.href}}
         if self.number:
             _dict["number"] = self.number
-        if self.issue_level:
-            _dict["issueLevel"] = self.issue_level
+        if self.issueLevel:
+            _dict["issueLevel"] = self.issueLevel
         if self.active_from:
             _dict["from"] = f"{self.active_from.isoformat()}Z"
         if self.active_until:
@@ -192,7 +192,7 @@ class FTCardholderCard:
         cls,
         card_type: FTItem,
         number: str = "",
-        issue_level: int | None = None,
+        issueLevel: int | None = None,
         active_from: datetime | None = None,
         active_until: datetime | None = None,
     ) -> FTCardholderCard:
@@ -200,8 +200,8 @@ class FTCardholderCard:
         _cls = FTCardholderCard(type=card_type)
         if number:
             _cls.number = number
-        if issue_level:
-            _cls.issue_level = issue_level
+        if issueLevel:
+            _cls.issueLevel = issueLevel
         if active_from:
             _cls.active_from = active_from
         if active_until:
@@ -214,8 +214,8 @@ class FTCardholderCard:
         _cls = FTCardholderCard(type=FTLinkItem(**kwargs["type"]))
         if number := kwargs.get("number"):
             _cls.number = number
-        if issue_level := kwargs.get("issueLevel"):
-            _cls.issue_level = issue_level
+        _cls.issueLevel = kwargs.get("issueLevel")
+
         if status := kwargs.get("status"):
             _cls.status = FTStatus(**status)
         if active_from := kwargs.get("from"):
@@ -229,14 +229,37 @@ class FTCardholderCard:
         return _cls
 
 
-@dataclass
-class FTPersonalDataDefinition:
-    """FTPersonalDataDefinition class."""
+@dataclass(init=False)
+class FTPersonalDataFieldDefinition:
+    """FTPersonalDataFieldDefinition class."""
 
     id: str
     name: str
+    description: str
     type: str
+    division: FTItemReference | None = None
+    default: str = ""
     href: str = ""
+    required: bool = False
+    unique: bool = False
+    accessGroups: list[FTLinkItem] = field(default_factory=list)
+    regex: str = ""
+    regexDescription: str = ""
+    contentType: str = ""
+    isProfileImage: bool = False
+
+    @classmethod
+    def from_dict(cls, kwargs: dict[str, Any]) -> FTPersonalDataFieldDefinition:
+        """Return FTPersonalDataFieldDefinition object from dict."""
+        _cls = FTPersonalDataFieldDefinition()
+        for key, value in kwargs.items():
+            if not isinstance(value, dict | list):
+                setattr(_cls, key, value)
+            if key == "division":
+                _cls.division = FTItemReference(**value)
+            if key == "accessGroups":
+                _cls.accessGroups = [FTLinkItem(**group) for group in value]
+        return _cls
 
 
 @dataclass
@@ -244,10 +267,10 @@ class FTCardholderPdfValue:
     """FTCardholderPdfValue class."""
 
     name: str
+    href: str = ""
     value: str | FTItemReference = field(init=False)
     notifications: bool = field(init=False)
-    definition: FTPersonalDataDefinition = field(init=False)
-    href: str = field(init=False)
+    definition: FTItem = field(init=False)
 
     @property
     def as_dict(self) -> dict[str, Any]:
@@ -274,7 +297,7 @@ class FTCardholderPdfValue:
                     FTItemReference(**value) if isinstance(value, dict) else value
                 )
             if definition := info.get("definition"):
-                _cls.definition = FTPersonalDataDefinition(**definition)
+                _cls.definition = FTPersonalDataFieldDefinition.from_dict(definition)
             if href := info.get("href"):
                 _cls.href = href
         return _cls
@@ -376,23 +399,23 @@ class FTCardholder:
     id: str = field(init=False)
     division: FTItemReference | None = None
     name: str = field(init=False)
-    firstName: str = field(default="")
-    lastName: str = field(default="")
-    shortName: str = field(default="")
-    description: str = field(default="")
+    firstName: str = ""
+    lastName: str = ""
+    shortName: str = ""
+    description: str = ""
     authorised: bool = field(default=False)
     pdfs: dict[str, Any] = field(default_factory=dict)
     lastSuccessfulAccessTime: datetime = field(init=False)
     lastSuccessfulAccessZone: FTLinkItem = field(init=False)
     serverDisplayName: str = field(init=False)
     disableCipherPad: bool = field(default=False)
-    usercode: str = field(default="")
+    usercode: str = ""
     operatorLoginEnabled: bool = field(default=False)
-    operatorUsername: str = field(default="")
-    operatorPassword: str = field(default="")
+    operatorUsername: str = ""
+    operatorPassword: str = ""
     operatorPasswordExpired: bool = field(default=False)
     windowsLoginEnabled: bool = field(default=False)
-    windowsUsername: str = field(default="")
+    windowsUsername: str = ""
     personalDataDefinitions: dict[str, FTCardholderPdfValue] | None = field(
         default=None
     )
@@ -402,7 +425,7 @@ class FTCardholder:
     # competencies: str
     # edit: str
     updateLocation: FTItemReference | None = None
-    notes: str = field(default="")
+    notes: str = ""
     # relationships: Any | None = None
     lockers: Any | None = None
     elevatorGroups: Any | None = None
