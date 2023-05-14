@@ -23,6 +23,7 @@ from .models import (
     FTItem,
     FTItemReference,
     FTITemTypes,
+    FTPersonalDataFieldDefinition,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -135,17 +136,23 @@ class BaseClient:
 class CardholderClient(BaseClient):
     """REST api cardholder client for Gallagher Command Center."""
 
-    async def get_personal_data_field(self, name: str | None = None) -> list[FTItem]:
+    async def get_personal_data_field(
+        self, name: str | None = None, extra_fields: list[str] = []
+    ) -> list[FTItem]:
         """Return List of available personal data fields."""
         pdfs: list[FTItem] = []
-        params = {}
+        extra_fields.append("defaults")
+        params = {"fields": ",".join(extra_fields)}
         if name:
             params = {"name": name}
 
         if response := await self._async_request(
             "GET", self.api_features.href("personalDataFields"), params=params
         ):
-            pdfs = [FTItem(**pdf) for pdf in response]
+            pdfs = [
+                FTPersonalDataFieldDefinition.from_dict(pdf)
+                for pdf in response["results"]
+            ]
 
         return pdfs
 
