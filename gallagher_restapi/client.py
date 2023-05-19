@@ -205,18 +205,25 @@ class Client:
                 ]
         return cardholders
 
-    async def create_cardholder(self, cardholder: FTCardholder) -> FTItemReference:
-        """Create a new cardholder in Gallagher."""
+    async def add_cardholder(self, cardholder: FTCardholder) -> FTItemReference:
+        """Add a new cardholder in Gallagher."""
         return await self._async_request(
             "POST", self.api_features.href("cardholders"), data=cardholder.as_dict
         )
 
-    async def update_cardholder(self, cardholder: FTCardholder) -> FTItemReference:
-        """Create a new cardholder in Gallagher."""
+    async def update_cardholder(self, cardholder: FTCardholder) -> bool:
+        """Update existing cardholder in Gallagher."""
         return await self._async_request(
             "PATCH",
             cardholder.href,
             data=cardholder.as_dict,
+        )
+
+    async def remove_cardholder(self, cardholder: FTCardholder) -> bool:
+        """Remove existing cardholder in Gallagher."""
+        return await self._async_request(
+            "DELETE",
+            cardholder.href,
         )
 
     async def get_event_types(self) -> None:
