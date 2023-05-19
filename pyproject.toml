@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "gallagher-restapi"
-version = "0.1.0b7"
+version = "0.1.0b8"
 description = ""
 authors = ["Rami Mosleh <engrbm87@gmail.com>"]
 packages = [{include = "gallagher_restapi"}]
@@ -10,9 +10,11 @@ exclude = ["examples.py"]
 python = "^3.10"
 httpx = "^0.23.3"
 pytz = "^2022.7.1"
-attrs = "^22.2.0"
 
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+gll_api = "gallagher_restapi.__main__:main"
