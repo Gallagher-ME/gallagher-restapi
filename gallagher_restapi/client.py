@@ -29,7 +29,7 @@ from .models import (
 _LOGGER = logging.getLogger(__name__)
 
 
-class BaseClient:
+class Client:
     """Gallagher REST api base client."""
 
     api_features: FTApiFeatures
@@ -55,6 +55,8 @@ class BaseClient:
             }
         )
         self.httpx_client.timeout.read = 60
+        self.event_groups: dict[str, FTEventGroup] = {}
+        self.event_types: dict[str, FTItem] = {}
 
     async def _async_request(
         self,
@@ -94,7 +96,7 @@ class BaseClient:
             )
         if response.status_code == httpx.codes.BAD_REQUEST:
             raise RequestError(response.json()["message"])
-        if response.status_code == httpx.codes.CREATED:
+        if response.status_code in [httpx.codes.CREATED, httpx.codes.NO_CONTENT]:
             return True
         return response.json()
 
@@ -132,19 +134,16 @@ class BaseClient:
             items = [FTItem(**item) for item in response["results"]]
         return items
 
-
-class CardholderClient(BaseClient):
-    """REST api cardholder client for Gallagher Command Center."""
-
     async def get_personal_data_field(
         self, name: str | None = None, extra_fields: list[str] = []
     ) -> list[FTItem]:
         """Return List of available personal data fields."""
         pdfs: list[FTItem] = []
-        extra_fields.append("defaults")
-        params = {"fields": ",".join(extra_fields)}
+        params = {}
         if name:
-            params = {"name": name}
+            params["name"] = name
+        if extra_fields:
+            params["fields"] = ",".join(extra_fields)
 
         if response := await self._async_request(
             "GET", self.api_features.href("personalDataFields"), params=params
@@ -159,16 +158,16 @@ class CardholderClient(BaseClient):
     async def get_cardholder(
         self,
         *,
-        ftitem_id: int | None = None,
+        id: int | None = None,
         name: str | None = None,
         pdfs: dict[str, str] | None = None,
-        detailed: bool = False,
+        extra_fields: list[str] = [],
     ) -> list[FTCardholder]:
         """Return list of cardholders."""
         cardholders: list[FTCardholder] = []
-        if ftitem_id:
+        if id:
             response: dict[str, Any] = await self._async_request(
-                "GET", f"{self.api_features.href('cardholders')}/{ftitem_id}"
+                "GET", f"{self.api_features.href('cardholders')}/{id}"
             )
             if response:
                 return [FTCardholder.from_dict(response)]
@@ -193,21 +192,17 @@ class CardholderClient(BaseClient):
                         raise GllApiError(f"pdf field: {pdf_name} not found")
                     params.update({f"pdf_{pdf_field[0].id}": value})
 
+            if extra_fields:
+                params["fields"] = ",".join(extra_fields)
+
             response = await self._async_request(
                 "GET", self.api_features.href("cardholders"), params=params
             )
             if response["results"]:
-                if detailed:
-                    for cardholder in response["results"]:
-                        cardholder_details = await self._async_request(
-                            "GET", cardholder["href"]
-                        )
-                        cardholders.append(FTCardholder.from_dict(cardholder_details))
-                else:
-                    cardholders = [
-                        FTCardholder.from_dict(cardholder)
-                        for cardholder in response["results"]
-                    ]
+                cardholders = [
+                    FTCardholder.from_dict(cardholder)
+                    for cardholder in response["results"]
+                ]
         return cardholders
 
     async def create_cardholder(self, cardholder: FTCardholder) -> FTItemReference:
@@ -216,12 +211,13 @@ class CardholderClient(BaseClient):
             "POST", self.api_features.href("cardholders"), data=cardholder.as_dict
         )
 
-
-class EventClient(BaseClient):
-    """REST api event client for Gallagher Command Center."""
-
-    event_groups: dict[str, FTEventGroup]
-    event_types: dict[str, FTItem]
+    async def update_cardholder(self, cardholder: FTCardholder) -> FTItemReference:
+        """Create a new cardholder in Gallagher."""
+        return await self._async_request(
+            "PATCH",
+            cardholder.href,
+            data=cardholder.as_dict,
+        )
 
     async def get_event_types(self) -> None:
         """Return list of event types."""
@@ -234,7 +230,6 @@ class EventClient(BaseClient):
             )
             for event_group in response["eventGroups"]
         }
-        self.event_types = {}
         for event_group in self.event_groups.values():
             self.event_types.update(
                 {event_type.name: event_type for event_type in event_group.event_types}

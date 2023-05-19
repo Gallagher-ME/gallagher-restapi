@@ -12,7 +12,15 @@ import pytz
 
 
 class FTITemTypes(Enum):
-    """Enumrate FTItem types."""
+    """Enumerate FTItem types."""
+
+
+class PatchAction(str, Enum):
+    """Enumerate Patch actions."""
+
+    ADD: str = "add"
+    UPDATE: str = "update"
+    REMOVE: str = "remove"
 
 
 @dataclass
@@ -47,7 +55,7 @@ class FTApiFeatures:
     def href(self, feature: str) -> str:
         """
         Return href link for feature.
-        For subfeteatures use format feature/subfeature
+        For sub_features use format main_feature/sub_feature
         """
         main_feature = sub_feature = ""
         try:
@@ -77,7 +85,7 @@ class FTStatus:
     """FTStatus class."""
 
     value: str
-    type: str
+    type: str = ""
 
 
 @dataclass
@@ -110,20 +118,20 @@ class FTLinkItem:
 class FTAccessGroupMembership:
     """FTAccessGroupMembership base class."""
 
+    href: str = ""
     status: FTStatus = field(init=False)
-    access_group: FTLinkItem = field(init=False)
+    accessGroup: FTLinkItem = field(init=False)
     active_from: datetime = field(init=False)
     active_until: datetime = field(init=False)
-    href: str = ""
 
     @property
-    def as_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return json string for post and update."""
-        _dict: dict[str, Any] = {"accessgroup": {"href": self.href}}
-        if self.active_from:
-            _dict["from"] = f"{self.active_from.isoformat()}Z"
-        if self.active_until:
-            _dict["until"] = f"{self.active_until.isoformat()}Z"
+        _dict: dict[str, Any] = {"accessGroup": {"href": self.href}}
+        if active_from := getattr(self, "active_from", None):
+            _dict["from"] = f"{active_from.isoformat()}Z"
+        if active_until := getattr(self, "active_until", None):
+            _dict["until"] = f"{active_until.isoformat()}Z"
         return _dict
 
     @classmethod
@@ -148,8 +156,8 @@ class FTAccessGroupMembership:
 
         if status := kwargs.get("status"):
             _cls.status = FTStatus(**status)
-        if access_group := kwargs.get("accessGroup"):
-            _cls.access_group = FTLinkItem(**access_group)
+        if accessGroup := kwargs.get("accessGroup"):
+            _cls.accessGroup = FTLinkItem(**accessGroup)
         if active_from := kwargs.get("from"):
             _cls.active_from = datetime.fromisoformat(active_from[:-1]).replace(
                 tzinfo=pytz.utc
@@ -166,6 +174,7 @@ class FTCardholderCard:
     """FTCardholder card base class."""
 
     type: FTLinkItem | FTItem
+    href: str = field(init=False)
     number: str = field(init=False)
     cardSerialNumber: str = field(init=False)
     issueLevel: int = field(init=False)
@@ -174,17 +183,20 @@ class FTCardholderCard:
     active_until: datetime = field(init=False)
 
     @property
-    def as_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return json string for post and update."""
         _dict: dict[str, Any] = {"type": {"href": self.type.href}}
-        if self.number:
-            _dict["number"] = self.number
-        if self.issueLevel:
-            _dict["issueLevel"] = self.issueLevel
-        if self.active_from:
-            _dict["from"] = f"{self.active_from.isoformat()}Z"
-        if self.active_until:
-            _dict["until"] = f"{self.active_until.isoformat()}Z"
+        _dict["href"] = self.href
+        if number := getattr(self, "number", None):
+            _dict["number"] = number
+        if issueLevel := getattr(self, "issueLevel", None):
+            _dict["issueLevel"] = issueLevel
+        if active_from := getattr(self, "active_from", None):
+            _dict["from"] = f"{active_from.isoformat()}Z"
+        if active_until := getattr(self, "active_until", None):
+            _dict["until"] = f"{active_until.isoformat()}Z"
+        if status := getattr(self, "status", None):
+            _dict["status"] = status
         return _dict
 
     @classmethod
@@ -212,6 +224,7 @@ class FTCardholderCard:
     def from_dict(cls, kwargs: dict[str, Any]) -> FTCardholderCard:
         """Return FTCardholderCard object from dict."""
         _cls = FTCardholderCard(type=FTLinkItem(**kwargs["type"]))
+        _cls.href = kwargs["href"]
         if number := kwargs.get("number"):
             _cls.number = number
         _cls.issueLevel = kwargs.get("issueLevel")
@@ -273,7 +286,7 @@ class FTCardholderPdfValue:
     definition: FTItem = field(init=False)
 
     @property
-    def as_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return json string for post and update."""
         return {f"@{self.name}": {"notifications": self.notifications}}
 
@@ -300,6 +313,8 @@ class FTCardholderPdfValue:
                 _cls.definition = FTPersonalDataFieldDefinition.from_dict(definition)
             if href := info.get("href"):
                 _cls.href = href
+            if "notifications" in info:
+                _cls.notifications = info["notifications"]
         return _cls
 
 
@@ -324,6 +339,7 @@ FTCARDHOLDER_FIELDS: tuple[FTCardholderField, ...] = (
     FTCardholderField(
         name="lastSuccessfulAccessTime",
         from_dict=lambda val: datetime.fromisoformat(val[:-1]).replace(tzinfo=pytz.utc),
+        to_dict=lambda val: f"{val.isoformat()}Z",
     ),
     FTCardholderField(
         name="lastSuccessfulAccessZone",
@@ -419,8 +435,10 @@ class FTCardholder:
     personalDataDefinitions: dict[str, FTCardholderPdfValue] | None = field(
         default=None
     )
-    cards: list[FTCardholderCard] | None = None
-    accessGroups: list[FTAccessGroupMembership] | None = None
+    cards: list[FTCardholderCard] | dict[str, list[FTCardholderCard]] | None = None
+    accessGroups: list[FTAccessGroupMembership] | dict[
+        str, list[FTAccessGroupMembership]
+    ] | None = None
     # operator_groups: str
     # competencies: str
     # edit: str
@@ -438,11 +456,16 @@ class FTCardholder:
         """Return serialized str."""
         _dict: dict[str, Any] = {}
         for cardholder_field in FTCARDHOLDER_FIELDS:
-            try:
-                if value := getattr(self, cardholder_field.name):
+            if value := getattr(self, cardholder_field.name, None):
+                if cardholder_field.name in [
+                    "cards",
+                    "accessGroups",
+                ] and isinstance(value, dict):
+                    _dict[cardholder_field.name] = {
+                        key: cardholder_field.to_dict(val) for key, val in value.items()
+                    }
+                else:
                     _dict[cardholder_field.name] = cardholder_field.to_dict(value)
-            except AttributeError:
-                continue
 
         if self.pdfs:
             _dict.update({f"@{name}": value for name, value in self.pdfs.items()})
@@ -451,7 +474,6 @@ class FTCardholder:
     @classmethod
     def from_dict(cls, kwargs: dict[str, Any]) -> FTCardholder:
         """Return FTCardholder object from dict."""
-
         _cls = FTCardholder()
         for cardholder_field in FTCARDHOLDER_FIELDS:
             if value := kwargs.get(cardholder_field.name):
@@ -461,6 +483,19 @@ class FTCardholder:
             if cardholder_pdf.startswith("@"):
                 _cls.pdfs[cardholder_pdf[1:]] = kwargs[cardholder_pdf]
 
+        return _cls
+
+    @classmethod
+    def patch(cls, cardholder: FTCardholder, **kwargs: Any) -> FTCardholder:
+        """Return FTCardholder object from dict."""
+        _cls = FTCardholder()
+        _cls.href = cardholder.href
+        for key, value in kwargs.items():
+            try:
+                setattr(_cls, key, value)
+            except AttributeError as err:
+                print(err)
+                continue
         return _cls
 
 
