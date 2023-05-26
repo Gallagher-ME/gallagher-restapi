@@ -177,9 +177,9 @@ class Client:
     # Personal fields methods
     async def get_personal_data_field(
         self, name: str | None = None, extra_fields: list[str] = []
-    ) -> list[FTItem]:
+    ) -> list[FTPersonalDataFieldDefinition]:
         """Return List of available personal data fields."""
-        pdfs: list[FTItem] = []
+        pdfs: list[FTPersonalDataFieldDefinition] = []
         params = {}
         if name:
             params["name"] = name
