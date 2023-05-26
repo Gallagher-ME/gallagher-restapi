@@ -15,9 +15,11 @@ from .exceptions import (
     Unauthorized,
 )
 from .models import (
+    DoorSort,
     EventFilter,
     FTApiFeatures,
     FTCardholder,
+    FTDoor,
     FTEvent,
     FTEventGroup,
     FTItem,
@@ -134,6 +136,45 @@ class Client:
             items = [FTItem(**item) for item in response["results"]]
         return items
 
+    # Door methods
+    async def get_door(
+        self,
+        *,
+        id: int | None = None,
+        name: str | None = None,
+        description: str | None = None,
+        sort: DoorSort = DoorSort.ID_ASC,
+        divisions: list[FTItem] = [],
+        extra_fields: list[str] = [],
+    ) -> list[FTDoor]:
+        """Return list of doors."""
+        doors: list[FTDoor] = []
+        if id:
+            response: dict[str, Any] = await self._async_request(
+                "GET", f"{self.api_features.href('doors')}/{id}"
+            )
+            if response:
+                return [FTDoor.from_dict(response)]
+
+        else:
+            params = {"sort": sort}
+            if name:
+                params = {"name": name}
+            if description:
+                params["description"]: description
+            if divisions:
+                params["divisions"] = ",".join(div.id for div in divisions)
+            if extra_fields:
+                params["fields"] = ",".join(extra_fields)
+
+            response = await self._async_request(
+                "GET", self.api_features.href("doors"), params=params
+            )
+            if response["results"]:
+                doors = [FTDoor.from_dict(door) for door in response["results"]]
+        return doors
+
+    # Personal fields methods
     async def get_personal_data_field(
         self, name: str | None = None, extra_fields: list[str] = []
     ) -> list[FTItem]:
@@ -155,6 +196,7 @@ class Client:
 
         return pdfs
 
+    # Cardholder methods
     async def get_cardholder(
         self,
         *,
@@ -242,6 +284,7 @@ class Client:
                 {event_type.name: event_type for event_type in event_group.event_types}
             )
 
+    # Event methods
     async def get_events(
         self, event_filter: EventFilter | None = None
     ) -> list[FTEvent]:

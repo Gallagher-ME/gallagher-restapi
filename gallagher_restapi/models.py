@@ -16,11 +16,20 @@ class FTITemTypes(Enum):
 
 
 class PatchAction(str, Enum):
-    """Enumerate Patch actions."""
+    """Enumerate patch actions."""
 
     ADD: str = "add"
     UPDATE: str = "update"
     REMOVE: str = "remove"
+
+
+class DoorSort(str, Enum):
+    """Enumerate door sorting."""
+
+    ID_ASC: str = "id"
+    ID_DSC: str = "-id"
+    NAME_ASC: str = "name"
+    NAME_DSC: str = "-name"
 
 
 @dataclass
@@ -275,6 +284,9 @@ class FTPersonalDataFieldDefinition:
         return _cls
 
 
+# Cardholder models
+
+
 @dataclass
 class FTCardholderPdfValue:
     """FTCardholderPdfValue class."""
@@ -499,7 +511,7 @@ class FTCardholder:
         return _cls
 
 
-# Gallagher alarm and event models
+# Alarm and event models
 @dataclass
 class FTAlarm:
     """FTAlarm summary class"""
@@ -727,3 +739,62 @@ class EventFilter:
                     raise ValueError(f"'{event_field}' is not a valid field")
             params["fields"] = ",".join(self.fields)
         return params
+
+
+# Door models
+
+
+@dataclass
+class FTDoorField:
+    """Class to represent FTDoor field."""
+
+    name: str
+    from_dict: Callable[[Any], Any] = lambda val: val
+    to_dict: Callable[[Any], Any] = lambda val: val
+
+
+FTDOOR_FIELDS: tuple[FTDoorField, ...] = (
+    FTDoorField(name="href"),
+    FTDoorField(name="id"),
+    FTDoorField(name="name"),
+    FTDoorField(name="division", from_dict=lambda val: FTItemReference(**val)),
+    FTDoorField(name="entryAccessZone", from_dict=lambda val: FTLinkItem(**val)),
+    FTDoorField(name="notes"),
+    FTDoorField(name="shortName"),
+    FTDoorField(name="updates", from_dict=lambda val: FTItemReference(**val)),
+    FTDoorField(name="statusFlags"),
+    FTDoorField(
+        name="commands",
+        from_dict=lambda val: {
+            command: FTItemReference(**value) for command, value in val
+        },
+    ),
+    FTDoorField(name="connectedController", from_dict=lambda val: FTItem(**val)),
+)
+
+
+@dataclass(init=False)
+class FTDoor:
+    """FTDoor details class."""
+
+    href: str
+    id: str
+    name: str
+    description: str
+    division: FTItemReference
+    entryAccessZone: FTLinkItem
+    notes: str
+    shortName: str
+    updates: FTItemReference
+    statusFlags: list[str]
+    commands: dict[str, FTItemReference]
+    connectedController: FTItem
+
+    @classmethod
+    def from_dict(cls, kwargs: dict[str, Any]) -> FTDoor:
+        """Return FTDoor object from dict."""
+        _cls = FTDoor()
+        for door_field in FTDOOR_FIELDS:
+            if value := kwargs.get(door_field.name):
+                setattr(_cls, door_field.name, door_field.from_dict(value))
+        return _cls
