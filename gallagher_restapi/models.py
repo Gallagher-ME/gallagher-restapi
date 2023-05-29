@@ -660,8 +660,7 @@ class FTEvent:
             if (value := kwargs.get(event_field.name)) or (
                 value := kwargs.get(event_field.key)
             ):
-                if isinstance(value, dict):
-                    value = event_field.value(kwargs[event_field.name])
+                value = event_field.value(kwargs[event_field.name])
                 setattr(_cls, event_field.key, value)
 
         return _cls
@@ -757,7 +756,7 @@ FTDOOR_FIELDS: tuple[FTDoorField, ...] = (
     FTDoorField(name="href"),
     FTDoorField(name="id"),
     FTDoorField(name="name"),
-    FTDoorField(name="division", from_dict=lambda val: FTItemReference(**val)),
+    FTDoorField(name="division", from_dict=lambda val: FTItem(**val)),
     FTDoorField(name="entryAccessZone", from_dict=lambda val: FTLinkItem(**val)),
     FTDoorField(name="notes"),
     FTDoorField(name="shortName"),
