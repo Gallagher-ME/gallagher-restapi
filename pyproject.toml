@@ -10,6 +10,7 @@ exclude = ["examples.py"]
 python = "^3.10"
 httpx = "^0.23.3"
 pytz = "^2022.7.1"
+awesomeversion = "^23.8.0"
 
 
 [build-system]

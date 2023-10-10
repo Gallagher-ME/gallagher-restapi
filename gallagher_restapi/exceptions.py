@@ -9,7 +9,7 @@ class ConnectError(GllApiError):
     """Error connecting to Gallagher server."""
 
 
-class Unauthorized(GllApiError):
+class UnauthorizedError(GllApiError):
     """Authentication failed."""
 
 

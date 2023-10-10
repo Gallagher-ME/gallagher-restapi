@@ -1,18 +1,18 @@
 """Gallagher REST api python library."""
 import asyncio
 import logging
-from enum import Enum
 from ssl import SSLError
 from typing import Any, AsyncIterator
 
 import httpx
 
+from awesomeversion import AwesomeVersion
 from .exceptions import (
     ConnectError,
     GllApiError,
     LicenseError,
     RequestError,
-    Unauthorized,
+    UnauthorizedError,
 )
 from .models import (
     DoorSort,
@@ -24,7 +24,6 @@ from .models import (
     FTEventGroup,
     FTItem,
     FTItemReference,
-    FTITemTypes,
     FTPersonalDataFieldDefinition,
 )
 
@@ -35,7 +34,6 @@ class Client:
     """Gallagher REST api base client."""
 
     api_features: FTApiFeatures
-    item_types: FTITemTypes
 
     def __init__(
         self,
@@ -43,6 +41,7 @@ class Client:
         *,
         host: str = "localhost",
         port: int = 8904,
+        token: str | None = None,
         httpx_client: httpx.AsyncClient | None = None,
     ) -> None:
         """Initialize REST api client."""
@@ -56,9 +55,13 @@ class Client:
                 "Content-Type": "application/json",
             }
         )
+        if token:
+            self.httpx_client.headers["IntegrationLicense"] = token
         self.httpx_client.timeout.read = 60
+        self._item_types: dict[str, str] = {}
         self.event_groups: dict[str, FTEventGroup] = {}
         self.event_types: dict[str, FTItem] = {}
+        self.version: str | None = None
 
     async def _async_request(
         self,
@@ -67,7 +70,7 @@ class Client:
         *,
         data: dict[str, Any] | None = None,
         params: dict[str, str] | str | None = None,
-    ) -> Any:
+    ) -> dict[str, Any]:
         """Send a http request and return the response."""
         _LOGGER.info(
             "Sending %s request to endpoint: %s, data: %s, params: %s",
@@ -80,7 +83,7 @@ class Client:
             response = await self.httpx_client.request(
                 method, endpoint, params=params, json=data
             )
-        except (httpx.ConnectError, httpx.ReadTimeout, SSLError) as err:
+        except (httpx.RequestError, SSLError) as err:
             raise ConnectError(
                 f"Connection failed while sending request: {err}"
             ) from err
@@ -88,7 +91,7 @@ class Client:
             "status_code: %s, response: %s", response.status_code, response.text
         )
         if response.status_code == httpx.codes.UNAUTHORIZED:
-            raise Unauthorized("Unauthorized request. Ensure api key is correct")
+            raise UnauthorizedError("Unauthorized request. Ensure api key is correct")
         if response.status_code == httpx.codes.FORBIDDEN:
             raise LicenseError("Site is not licensed for this operation")
         if response.status_code == httpx.codes.NOT_FOUND:
@@ -98,35 +101,38 @@ class Client:
             )
         if response.status_code == httpx.codes.BAD_REQUEST:
             raise RequestError(response.json()["message"])
-        if response.status_code in [httpx.codes.CREATED, httpx.codes.NO_CONTENT]:
-            return True
+        if response.status_code == httpx.codes.CREATED:
+            return {"location": response.headers.get("location")}
+        if response.status_code == httpx.codes.NO_CONTENT:
+            return {}
         return response.json()
 
-    async def authenticate(self) -> None:
-        """Connect to Server to authenticate."""
+    async def initialize(self) -> None:
+        """Connect to Server and initialize data."""
         response = await self._async_request("GET", f"{self.server_url}/api/")
         self.api_features = FTApiFeatures(**response["features"])
+        self.version = AwesomeVersion(response["version"])
+        await self._update_item_types()
+        await self._update_event_types()
 
-    async def get_item_types(self) -> None:
+    async def _update_item_types(self) -> None:
         """Get FTItem types."""
-        item_types: list[str] = []
         response = await self._async_request(
             "GET", self.api_features.href("items/itemTypes")
         )
         if response.get("itemTypes"):
-            item_types = [
-                item_type["name"]
+            self._item_types = {
+                item_type["name"]: item_type["id"]
                 for item_type in response["itemTypes"]
                 if item_type["name"]
-            ]
-        self.item_types = Enum("FTITemTypes", item_types)  # type: ignore
+            }
 
-    async def get_item(
-        self, item_type: FTITemTypes, name: str | None = None
-    ) -> list[FTItem]:
+    async def get_item(self, item_type: str, name: str | None = None) -> list[FTItem]:
         """Get FTItems filtered by type and name."""
         # We will force selecting type for now
-        params = {"type": item_type.value}
+        if not (type_id := self._item_types.get(item_type)):
+            raise ValueError(f"Unknown item type: {item_type}")
+        params = {"type": type_id}
         if name:
             params["name"] = name
         items: list[FTItem] = []
@@ -157,11 +163,11 @@ class Client:
                 return [FTDoor.from_dict(response)]
 
         else:
-            params = {"sort": sort}
+            params: dict[str, Any] = {"sort": sort}
             if name:
-                params = {"name": name}
+                params["name"] = name
             if description:
-                params["description"]: description
+                params["description"] = description
             if divisions:
                 params["divisions"] = ",".join(div.id for div in divisions)
             if extra_fields:
@@ -227,7 +233,7 @@ class Client:
                 for pdf_name, value in pdfs.items():
                     if not (pdf_name.startswith('"') and pdf_name.endswith('"')):
                         pdf_name = f'"{pdf_name}"'
-                    # if pdf name is correct we expect the result to include one item only
+                    # if pdf name is correct the result should include one item only
                     if not (
                         pdf_field := await self.get_personal_data_field(name=pdf_name)
                     ):
@@ -249,11 +255,12 @@ class Client:
 
     async def add_cardholder(self, cardholder: FTCardholder) -> FTItemReference:
         """Add a new cardholder in Gallagher."""
-        return await self._async_request(
+        response = await self._async_request(
             "POST", self.api_features.href("cardholders"), data=cardholder.as_dict
         )
+        return FTItemReference(response["location"])
 
-    async def update_cardholder(self, cardholder: FTCardholder) -> bool:
+    async def update_cardholder(self, cardholder: FTCardholder) -> dict[str, Any]:
         """Update existing cardholder in Gallagher."""
         return await self._async_request(
             "PATCH",
@@ -261,15 +268,16 @@ class Client:
             data=cardholder.as_dict,
         )
 
-    async def remove_cardholder(self, cardholder: FTCardholder) -> bool:
+    async def remove_cardholder(self, cardholder: FTCardholder) -> None:
         """Remove existing cardholder in Gallagher."""
-        return await self._async_request(
+        await self._async_request(
             "DELETE",
             cardholder.href,
         )
 
-    async def get_event_types(self) -> None:
-        """Return list of event types."""
+    # Event methods
+    async def _update_event_types(self) -> None:
+        """Fetch list of event groups and types from server."""
         response = await self._async_request(
             "GET", self.api_features.href("events/eventGroups")
         )
@@ -284,7 +292,6 @@ class Client:
                 {event_type.name: event_type for event_type in event_group.event_types}
             )
 
-    # Event methods
     async def get_events(
         self, event_filter: EventFilter | None = None
     ) -> list[FTEvent]:
@@ -299,6 +306,29 @@ class Client:
         return events
 
     async def get_new_events(
+        self,
+        event_filter: EventFilter | None = None,
+        updates: str | None = None,
+    ) -> tuple[list[FTEvent], str]:
+        """
+        Return new events filtered by params and the link for the next event search.
+        """
+        if updates is not None:
+            response = await self._async_request(
+                "GET",
+                updates,
+            )
+        else:
+            response = await self._async_request(
+                "GET",
+                self.api_features.href("events/updates"),
+                params=event_filter.as_dict if event_filter else None,
+            )
+        events: list[FTEvent] = response["events"]
+        next: str = response["next"]
+        return (events, next)
+
+    async def yield_new_events(
         self, event_filter: EventFilter | None = None
     ) -> AsyncIterator[list[FTEvent]]:
         """Yield a list of new events filtered by params."""
@@ -311,6 +341,8 @@ class Client:
             _LOGGER.debug(response)
             yield [FTEvent.from_dict(event) for event in response["events"]]
             await asyncio.sleep(1)
+            # Check if next link should be called,
+            # how to tell if there are more events in next link
             response = await self._async_request(
                 "GET",
                 response["updates"]["href"],

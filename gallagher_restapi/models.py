@@ -6,13 +6,9 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, cast
 
 import pytz
-
-
-class FTITemTypes(Enum):
-    """Enumerate FTItem types."""
 
 
 class PatchAction(str, Enum):
@@ -236,7 +232,7 @@ class FTCardholderCard:
         _cls.href = kwargs["href"]
         if number := kwargs.get("number"):
             _cls.number = number
-        _cls.issueLevel = kwargs.get("issueLevel")
+        _cls.issueLevel = cast(int, kwargs.get("issueLevel"))
 
         if status := kwargs.get("status"):
             _cls.status = FTStatus(**status)
@@ -259,7 +255,7 @@ class FTPersonalDataFieldDefinition:
     name: str
     description: str
     type: str
-    division: FTItemReference | None = None
+    division: FTItem | None = None
     default: str = ""
     href: str = ""
     required: bool = False
@@ -277,14 +273,22 @@ class FTPersonalDataFieldDefinition:
         for key, value in kwargs.items():
             if not isinstance(value, dict | list):
                 setattr(_cls, key, value)
-            if key == "division":
-                _cls.division = FTItemReference(**value)
+            if key == "division" and isinstance(value, dict):
+                _cls.division = FTItem(**value)
             if key == "accessGroups":
                 _cls.accessGroups = [FTLinkItem(**group) for group in value]
         return _cls
 
 
 # Cardholder models
+@dataclass
+class FTCardholderPdfDefinition:
+    """FTCardholderPdfDefinition class."""
+
+    id: str
+    name: str
+    href: str
+    type: str
 
 
 @dataclass
@@ -295,7 +299,7 @@ class FTCardholderPdfValue:
     href: str = ""
     value: str | FTItemReference = field(init=False)
     notifications: bool = field(init=False)
-    definition: FTItem = field(init=False)
+    definition: FTCardholderPdfDefinition = field(init=False)
 
     @property
     def to_dict(self) -> dict[str, Any]:
@@ -313,8 +317,9 @@ class FTCardholderPdfValue:
         return _cls
 
     @classmethod
-    def from_dict(cls, kwargs: dict[str, dict[str, Any]]) -> FTCardholderPdfValue:
+    def from_dict(cls, kwargs: dict[str, dict[str, Any]]) -> list[FTCardholderPdfValue]:
         """Return FTCardholderPdfValue object from dict."""
+        pdf_values: list[FTCardholderPdfValue] = []
         for name, info in kwargs.items():
             _cls = FTCardholderPdfValue(name=name[1:])
             if value := info.get("value"):
@@ -322,12 +327,13 @@ class FTCardholderPdfValue:
                     FTItemReference(**value) if isinstance(value, dict) else value
                 )
             if definition := info.get("definition"):
-                _cls.definition = FTPersonalDataFieldDefinition.from_dict(definition)
+                _cls.definition = FTCardholderPdfDefinition(**definition)
             if href := info.get("href"):
                 _cls.href = href
             if "notifications" in info:
                 _cls.notifications = info["notifications"]
-        return _cls
+            pdf_values.append(_cls)
+        return pdf_values
 
 
 @dataclass
@@ -369,9 +375,7 @@ FTCARDHOLDER_FIELDS: tuple[FTCardholderField, ...] = (
     FTCardholderField(name="windowsUsername"),
     FTCardholderField(
         name="personalDataDefinitions",
-        from_dict=lambda val: [
-            FTCardholderPdfValue.from_dict(pdf_value) for pdf_value in val
-        ],
+        from_dict=lambda val: FTCardholderPdfValue.from_dict(val),
         to_dict=lambda val: [pdf_value.to_dict for pdf_value in val],
     ),
     FTCardholderField(

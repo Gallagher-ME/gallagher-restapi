@@ -7,7 +7,6 @@ import os
 import httpx
 
 import gallagher_restapi
-from gallagher_restapi.models import FTCardholder, FTItemReference
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -16,17 +15,15 @@ async def main(host: str, port: int, api_key: str) -> None:
     """Test connecting to Gallagher REST api."""
     try:
         async with httpx.AsyncClient(verify=False) as httpx_client:
-            cardholder_client = gallagher_restapi.CardholderClient(
+            cardholder_client = gallagher_restapi.Client(
                 host=host,
                 port=port,
                 api_key=api_key,
                 httpx_client=httpx_client,
             )
-            await cardholder_client.authenticate()
-            await cardholder_client.get_item_types()
-            if divisions := await cardholder_client.get_item(
-                cardholder_client.item_types["Division"], "ICAD"
-            ):
+            await cardholder_client.initialize()
+            await cardholder_client._update_item_types()
+            if divisions := await cardholder_client.get_item("Division", "ICAD"):
                 _LOGGER.info(divisions[0])
                 # new_cardholder = FTCardholder(
                 #     firstName="Rami",
@@ -39,14 +36,14 @@ async def main(host: str, port: int, api_key: str) -> None:
         _LOGGER.error(err)
     try:
         async with httpx.AsyncClient(verify=False) as httpx_client:
-            cardholder_client = gallagher_restapi.CardholderClient(
+            cardholder_client = gallagher_restapi.Client(
                 host=host,
                 port=port,
                 api_key=api_key,
                 httpx_client=httpx_client,
             )
-            await cardholder_client.authenticate()
-            if cardholders := await cardholder_client.get_cardholder(detailed=True):
+            await cardholder_client.initialize()
+            if cardholders := await cardholder_client.get_cardholder():
                 _LOGGER.info(
                     "Successfully connected to Gallagher server"
                     "and retrieved %s cardholders",
@@ -56,16 +53,17 @@ async def main(host: str, port: int, api_key: str) -> None:
         _LOGGER.error(err)
     try:
         async with httpx.AsyncClient(verify=False) as httpx_client:
-            event_client = gallagher_restapi.EventClient(
+            event_client = gallagher_restapi.Client(
                 host=host,
                 port=port,
                 api_key=api_key,
                 httpx_client=httpx_client,
             )
-            await event_client.authenticate()
+            await event_client.initialize()
             event_filter = gallagher_restapi.EventFilter(
                 top=1,
                 previous=True,
+                event_groups=[event_client.event_groups["Card Event"]],
             )
             last_event = await event_client.get_events(event_filter=event_filter)
             _LOGGER.info(
