@@ -22,6 +22,7 @@ from .models import (
     FTDoor,
     FTEvent,
     FTEventGroup,
+    EventPost,
     FTItem,
     FTItemReference,
     FTPersonalDataFieldDefinition,
@@ -142,6 +143,30 @@ class Client:
             items = [FTItem(**item) for item in response["results"]]
         return items
 
+    async def get_access_zone(self, name: str | None = None) -> list[FTItem]:
+        """Get Access zones filtered by name."""
+        params: dict[str, str] = {}
+        if name:
+            params["name"] = name
+        items: list[FTItem] = []
+        if response := await self._async_request(
+            "GET", self.api_features.href("access_zones"), params=params
+        ):
+            items = [FTItem(**item) for item in response["results"]]
+        return items
+
+    async def get_access_group(self, name: str | None = None) -> list[dict[str, Any]]:
+        """Get Access groups filtered by name."""
+        params: dict[str, str] = {}
+        if name:
+            params["name"] = name
+        # items: list[FTItem] = []
+        response = await self._async_request(
+            "GET", self.api_features.href("access_groups"), params=params
+        )
+        # items = [FTItem(**item) for item in response["results"]]
+        return response["results"]
+
     # Door methods
     async def get_door(
         self,
@@ -256,7 +281,7 @@ class Client:
     async def add_cardholder(self, cardholder: FTCardholder) -> FTItemReference:
         """Add a new cardholder in Gallagher."""
         response = await self._async_request(
-            "POST", self.api_features.href("cardholders"), data=cardholder.as_dict
+            "POST", self.api_features.href("cardholders"), data=cardholder.as_dict()
         )
         return FTItemReference(response["location"])
 
@@ -265,7 +290,7 @@ class Client:
         return await self._async_request(
             "PATCH",
             cardholder.href,
-            data=cardholder.as_dict,
+            data=cardholder.as_dict(),
         )
 
     async def remove_cardholder(self, cardholder: FTCardholder) -> None:
@@ -281,12 +306,11 @@ class Client:
         response = await self._async_request(
             "GET", self.api_features.href("events/eventGroups")
         )
-        self.event_groups = {
-            FTEventGroup.from_dict(event_group).name: FTEventGroup.from_dict(
-                event_group
-            )
-            for event_group in response["eventGroups"]
-        }
+
+        for item in response["eventGroups"]:
+            event_group = FTEventGroup.from_dict(item)
+            self.event_groups[event_group.name] = event_group
+
         for event_group in self.event_groups.values():
             self.event_types.update(
                 {event_type.name: event_type for event_type in event_group.event_types}
@@ -300,7 +324,7 @@ class Client:
         if response := await self._async_request(
             "GET",
             self.api_features.href("events"),
-            params=event_filter.as_dict if event_filter else None,
+            params=event_filter.as_dict() if event_filter else None,
         ):
             events = [FTEvent.from_dict(event) for event in response["events"]]
         return events
@@ -322,7 +346,7 @@ class Client:
             response = await self._async_request(
                 "GET",
                 self.api_features.href("events/updates"),
-                params=event_filter.as_dict if event_filter else None,
+                params=event_filter.as_dict() if event_filter else None,
             )
         events: list[FTEvent] = response["events"]
         next: str = response["next"]
@@ -335,7 +359,7 @@ class Client:
         response = await self._async_request(
             "GET",
             self.api_features.href("events/updates"),
-            params=event_filter.as_dict if event_filter else None,
+            params=event_filter.as_dict() if event_filter else None,
         )
         while True:
             _LOGGER.debug(response)
@@ -346,5 +370,14 @@ class Client:
             response = await self._async_request(
                 "GET",
                 response["updates"]["href"],
-                params=event_filter.as_dict if event_filter else None,
+                params=event_filter.as_dict() if event_filter else None,
             )
+
+    async def push_event(self, event: EventPost) -> FTItemReference | None:
+        """Push a new event to Gallagher and return the event href."""
+        response = await self._async_request(
+            "POST", self.api_features.href("events"), data=event.as_dict()
+        )
+        if href := response.get("location"):
+            return href
+        return None
