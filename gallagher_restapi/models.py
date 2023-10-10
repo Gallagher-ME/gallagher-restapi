@@ -467,7 +467,6 @@ class FTCardholder:
     lastPrintedOrEncodedIssueLevel: int | None = None
     # redactions: Any | None = None
 
-    @property
     def as_dict(self) -> dict[str, Any]:
         """Return serialized str."""
         _dict: dict[str, Any] = {}
@@ -686,7 +685,6 @@ class EventFilter:
     fields: list[str] | None = None
     previous: bool = False
 
-    @property
     def as_dict(self) -> dict[str, Any]:
         """Return event filter as dict."""
         params: dict[str, Any] = {"previous": self.previous}
@@ -742,6 +740,55 @@ class EventFilter:
                     raise ValueError(f"'{event_field}' is not a valid field")
             params["fields"] = ",".join(self.fields)
         return params
+
+
+@dataclass
+class EventPost:
+    """FTEvent summary class."""
+
+    eventType: FTItem
+    source: FTDoor | FTItem | None = None
+    priority: int | None = None
+    time: datetime | None = None
+    message: str | None = None
+    details: str | None = None
+    cardholder: FTCardholder | None = None
+    operator: FTCardholder | None = None
+    entryAccessZone: FTItem | None = None
+    accessGroup: dict[str, Any] | None = None
+    lockerBank: FTItem | None = None
+    locker: FTItem | None = None
+    door: FTDoor | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        """Return a dict from Event object."""
+        _dict: dict[str, Any] = {
+            "type": {"href": self.eventType.href},
+            "eventType": {"href": self.eventType.href},
+        }
+        if self.source is not None:
+            _dict["source"] = {"href": self.source.href}
+        if self.priority is not None:
+            _dict["priority"] = self.priority
+        if self.time is not None:
+            _dict["time"] = f"{self.time.isoformat()}Z"
+        if self.message is not None:
+            _dict["message"] = self.message
+        if self.details is not None:
+            _dict["details"] = self.details
+        if self.cardholder is not None:
+            _dict["cardholder"] = {"href": self.cardholder.href}
+        if self.operator is not None:
+            _dict["operator"] = {"href": self.operator.href}
+        if self.entryAccessZone is not None:
+            _dict["entryAccessZone"] = {"href": self.entryAccessZone.href}
+        if self.lockerBank is not None:
+            _dict["lockerBank"] = {"href": self.lockerBank.href}
+        if self.locker is not None:
+            _dict["locker"] = {"href": self.locker.href}
+        if self.door is not None:
+            _dict["door"] = {"href": self.door.href}
+        return _dict
 
 
 # Door models
