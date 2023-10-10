@@ -42,7 +42,9 @@ async def main(host: str, port: int, api_key: str) -> None:
                 httpx_client=httpx_client,
             )
             await client.initialize()
-            if cardholders := await client.get_cardholder():
+            if cardholders := await client.get_cardholder(
+                extra_fields=["id", "firstName", "lastName"]
+            ):
                 _LOGGER.info(
                     "Successfully connected to Gallagher server"
                     "and retrieved %s cardholders",

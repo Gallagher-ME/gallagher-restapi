@@ -71,8 +71,12 @@ class Client:
         *,
         data: dict[str, Any] | None = None,
         params: dict[str, str] | str | None = None,
+        extra_fields: list[str] | None = None,
     ) -> dict[str, Any]:
         """Send a http request and return the response."""
+        if extra_fields:
+            params["fields"] = ",".join(extra_fields)
+
         _LOGGER.info(
             "Sending %s request to endpoint: %s, data: %s, params: %s",
             method,
@@ -128,7 +132,12 @@ class Client:
                 if item_type["name"]
             }
 
-    async def get_item(self, item_type: str, name: str | None = None) -> list[FTItem]:
+    async def get_item(
+        self,
+        item_type: str,
+        name: str | None = None,
+        extra_fields: list[str] | None = None,
+    ) -> list[FTItem]:
         """Get FTItems filtered by type and name."""
         # We will force selecting type for now
         if not (type_id := self._item_types.get(item_type)):
@@ -138,31 +147,48 @@ class Client:
             params["name"] = name
         items: list[FTItem] = []
         if response := await self._async_request(
-            "GET", self.api_features.href("items"), params=params
+            "GET",
+            self.api_features.href("items"),
+            params=params,
+            extra_fields=extra_fields,
         ):
             items = [FTItem(**item) for item in response["results"]]
         return items
 
-    async def get_access_zone(self, name: str | None = None) -> list[FTItem]:
+    async def get_access_zone(
+        self,
+        name: str | None = None,
+        extra_fields: list[str] | None = None,
+    ) -> list[FTItem]:
         """Get Access zones filtered by name."""
         params: dict[str, str] = {}
         if name:
             params["name"] = name
         items: list[FTItem] = []
         if response := await self._async_request(
-            "GET", self.api_features.href("access_zones"), params=params
+            "GET",
+            self.api_features.href("access_zones"),
+            params=params,
+            extra_fields=extra_fields,
         ):
             items = [FTItem(**item) for item in response["results"]]
         return items
 
-    async def get_access_group(self, name: str | None = None) -> list[dict[str, Any]]:
+    async def get_access_group(
+        self,
+        name: str | None = None,
+        extra_fields: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
         """Get Access groups filtered by name."""
         params: dict[str, str] = {}
         if name:
             params["name"] = name
         # items: list[FTItem] = []
         response = await self._async_request(
-            "GET", self.api_features.href("access_groups"), params=params
+            "GET",
+            self.api_features.href("access_groups"),
+            params=params,
+            extra_fields=extra_fields,
         )
         # items = [FTItem(**item) for item in response["results"]]
         return response["results"]
@@ -176,7 +202,7 @@ class Client:
         description: str | None = None,
         sort: DoorSort = DoorSort.ID_ASC,
         divisions: list[FTItem] = [],
-        extra_fields: list[str] = [],
+        extra_fields: list[str] | None = None,
     ) -> list[FTDoor]:
         """Return list of doors."""
         doors: list[FTDoor] = []
@@ -195,11 +221,12 @@ class Client:
                 params["description"] = description
             if divisions:
                 params["divisions"] = ",".join(div.id for div in divisions)
-            if extra_fields:
-                params["fields"] = ",".join(extra_fields)
 
             response = await self._async_request(
-                "GET", self.api_features.href("doors"), params=params
+                "GET",
+                self.api_features.href("doors"),
+                params=params,
+                extra_fields=extra_fields,
             )
             if response["results"]:
                 doors = [FTDoor.from_dict(door) for door in response["results"]]
@@ -207,18 +234,21 @@ class Client:
 
     # Personal fields methods
     async def get_personal_data_field(
-        self, name: str | None = None, extra_fields: list[str] = []
+        self,
+        name: str | None = None,
+        extra_fields: list[str] | None = None,
     ) -> list[FTPersonalDataFieldDefinition]:
         """Return List of available personal data fields."""
         pdfs: list[FTPersonalDataFieldDefinition] = []
         params = {}
         if name:
             params["name"] = name
-        if extra_fields:
-            params["fields"] = ",".join(extra_fields)
 
         if response := await self._async_request(
-            "GET", self.api_features.href("personalDataFields"), params=params
+            "GET",
+            self.api_features.href("personalDataFields"),
+            params=params,
+            extra_fields=extra_fields,
         ):
             pdfs = [
                 FTPersonalDataFieldDefinition.from_dict(pdf)
@@ -234,7 +264,7 @@ class Client:
         id: int | None = None,
         name: str | None = None,
         pdfs: dict[str, str] | None = None,
-        extra_fields: list[str] = [],
+        extra_fields: list[str] | None = None,
     ) -> list[FTCardholder]:
         """Return list of cardholders."""
         cardholders: list[FTCardholder] = []
@@ -265,11 +295,11 @@ class Client:
                         raise GllApiError(f"pdf field: {pdf_name} not found")
                     params.update({f"pdf_{pdf_field[0].id}": value})
 
-            if extra_fields:
-                params["fields"] = ",".join(extra_fields)
-
             response = await self._async_request(
-                "GET", self.api_features.href("cardholders"), params=params
+                "GET",
+                self.api_features.href("cardholders"),
+                params=params,
+                extra_fields=extra_fields,
             )
             if response["results"]:
                 cardholders = [
