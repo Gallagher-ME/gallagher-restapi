@@ -70,10 +70,11 @@ class Client:
         endpoint: str,
         *,
         data: dict[str, Any] | None = None,
-        params: dict[str, str] | str | None = None,
+        params: dict[str, str] | None = None,
         extra_fields: list[str] | None = None,
     ) -> dict[str, Any]:
         """Send a http request and return the response."""
+        params = params or {}
         if extra_fields:
             params["fields"] = ",".join(extra_fields)
 
