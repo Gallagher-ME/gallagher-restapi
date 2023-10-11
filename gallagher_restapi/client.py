@@ -378,8 +378,10 @@ class Client:
                 self.api_features.href("events/updates"),
                 params=event_filter.as_dict() if event_filter else None,
             )
-        events: list[FTEvent] = response["events"]
-        next: str = response["next"]
+        events: list[FTEvent] = [
+            FTEvent.from_dict(event) for event in response["events"]
+        ]
+        next: str = response["next"]["href"]
         return (events, next)
 
     async def yield_new_events(
