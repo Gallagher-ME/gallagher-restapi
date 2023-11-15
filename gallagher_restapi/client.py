@@ -376,7 +376,7 @@ class Client:
         else:
             response = await self._async_request(
                 "GET",
-                self.api_features.href("events/updates"),
+                self.api_features.href("events"),
                 params=event_filter.as_dict() if event_filter else None,
             )
         events: list[FTEvent] = [

@@ -317,22 +317,25 @@ class FTCardholderPdfValue:
         return _cls
 
     @classmethod
-    def from_dict(cls, kwargs: dict[str, dict[str, Any]]) -> list[FTCardholderPdfValue]:
+    def from_dict(
+        cls, kwargs: list[dict[str, dict[str, Any]]]
+    ) -> list[dict[str, FTCardholderPdfValue]]:
         """Return FTCardholderPdfValue object from dict."""
-        pdf_values: list[FTCardholderPdfValue] = []
-        for name, info in kwargs.items():
-            _cls = FTCardholderPdfValue(name=name[1:])
-            if value := info.get("value"):
-                _cls.value = (
-                    FTItemReference(**value) if isinstance(value, dict) else value
-                )
-            if definition := info.get("definition"):
-                _cls.definition = FTCardholderPdfDefinition(**definition)
-            if href := info.get("href"):
-                _cls.href = href
-            if "notifications" in info:
-                _cls.notifications = info["notifications"]
-            pdf_values.append(_cls)
+        pdf_values: list[dict[str, FTCardholderPdfValue]] = []
+        for pdf_value in kwargs:
+            for name, info in pdf_value.items():
+                _cls = FTCardholderPdfValue(name=name[1:])
+                if value := info.get("value"):
+                    _cls.value = (
+                        FTItemReference(**value) if isinstance(value, dict) else value
+                    )
+                if definition := info.get("definition"):
+                    _cls.definition = FTCardholderPdfDefinition(**definition)
+                if href := info.get("href"):
+                    _cls.href = href
+                if "notifications" in info:
+                    _cls.notifications = info["notifications"]
+                pdf_values.append({name[1:]: _cls})
         return pdf_values
 
 
@@ -448,7 +451,7 @@ class FTCardholder:
     operatorPasswordExpired: bool = field(default=False)
     windowsLoginEnabled: bool = field(default=False)
     windowsUsername: str = ""
-    personalDataDefinitions: dict[str, FTCardholderPdfValue] | None = field(
+    personalDataDefinitions: list[dict[str, FTCardholderPdfValue]] | None = field(
         default=None
     )
     cards: list[FTCardholderCard] | dict[str, list[FTCardholderCard]] | None = None
