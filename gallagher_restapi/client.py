@@ -1,5 +1,6 @@
 """Gallagher REST api python library."""
 import asyncio
+import base64
 import logging
 from ssl import SSLError
 from typing import Any, AsyncIterator
@@ -111,7 +112,9 @@ class Client:
             return {"location": response.headers.get("location")}
         if response.status_code == httpx.codes.NO_CONTENT:
             return {}
-        return response.json()
+        if "application/json" in response.headers.get("content-type"):
+            return response.json()
+        return {"result": response.content}
 
     async def initialize(self) -> None:
         """Connect to Server and initialize data."""
@@ -236,19 +239,25 @@ class Client:
     # Personal fields methods
     async def get_personal_data_field(
         self,
+        *,
+        id: int | None = None,
         name: str | None = None,
         extra_fields: list[str] | None = None,
     ) -> list[FTPersonalDataFieldDefinition]:
         """Return List of available personal data fields."""
         pdfs: list[FTPersonalDataFieldDefinition] = []
-        params = {}
-        if name:
-            params["name"] = name
+        if id:
+            response: dict[str, Any] = await self._async_request(
+                "GET", f"{self.api_features.href('personalDataFields')}/{id}"
+            )
+            if response:
+                pdfs = [FTPersonalDataFieldDefinition.from_dict(response)]
+            return pdfs
 
         if response := await self._async_request(
             "GET",
             self.api_features.href("personalDataFields"),
-            params=params,
+            params={"name": name} if name else None,
             extra_fields=extra_fields,
         ):
             pdfs = [
@@ -274,14 +283,15 @@ class Client:
                 "GET", f"{self.api_features.href('cardholders')}/{id}"
             )
             if response:
-                return [FTCardholder.from_dict(response)]
-
+                cardholders = [FTCardholder.from_dict(response)]
+            return cardholders
         else:
             if name and not isinstance(name, str):
                 raise ValueError("name field must be a string value.")
             if pdfs and not isinstance(pdfs, dict):
                 raise ValueError("pdfs field must be a dict.")
-            params = {}
+
+            params: dict[str, str] = {}
             if name:
                 params = {"name": name}
 
@@ -308,6 +318,13 @@ class Client:
                     for cardholder in response["results"]
                 ]
         return cardholders
+
+    async def get_image_from_pdf(self, cardholder_id: str, pdf_id: str) -> str | None:
+        """Returns base64 string of the image field."""
+        url = f"{self.api_features.href('cardholders')}/{cardholder_id}/personal_data/{pdf_id}"
+        if response := await self._async_request("GET", url):
+            return base64.b64encode(response["result"]).decode("utf-8")
+        return None
 
     async def add_cardholder(self, cardholder: FTCardholder) -> FTItemReference:
         """Add a new cardholder in Gallagher."""
