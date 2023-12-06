@@ -18,6 +18,7 @@ from .exceptions import (
 from .models import (
     DoorSort,
     EventFilter,
+    FTAccessGroup,
     FTApiFeatures,
     FTCardholder,
     FTDoor,
@@ -180,22 +181,36 @@ class Client:
 
     async def get_access_group(
         self,
+        *,
+        id: int | None = None,
         name: str | None = None,
+        divisions: list[FTItem | str] = [],
         extra_fields: list[str] | None = None,
-    ) -> list[dict[str, Any]]:
+    ) -> list[FTAccessGroup]:
         """Get Access groups filtered by name."""
+        if id:
+            response: dict[str, Any] = await self._async_request(
+                "GET", f"{self.api_features.href('accessGroups')}/{id}"
+            )
+            if response:
+                return [FTAccessGroup.from_dict(response)]
+
         params: dict[str, str] = {}
         if name:
             params["name"] = name
-        # items: list[FTItem] = []
+        if divisions:
+            params["division"] = ",".join(
+                div.id if isinstance(div, FTItem) else div for div in divisions
+            )
+
         response = await self._async_request(
             "GET",
-            self.api_features.href("access_groups"),
+            self.api_features.href("accessGroups"),
             params=params,
             extra_fields=extra_fields,
         )
-        # items = [FTItem(**item) for item in response["results"]]
-        return response["results"]
+        items = [FTAccessGroup.from_dict(item) for item in response["results"]]
+        return items
 
     # Door methods
     async def get_door(
@@ -224,7 +239,7 @@ class Client:
             if description:
                 params["description"] = description
             if divisions:
-                params["divisions"] = ",".join(div.id for div in divisions)
+                params["division"] = ",".join(div.id for div in divisions)
 
             response = await self._async_request(
                 "GET",
