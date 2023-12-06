@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any, cast
+from dacite import from_dict
 
 import pytz
 
@@ -117,6 +118,49 @@ class FTLinkItem:
 
     name: str
     href: str = ""
+
+
+@dataclass
+class FTAccessGroup:
+    """FTAccessGroup item base class."""
+
+    id: str
+    href: str
+    name: str
+    description: str | None
+    parent: FTLinkItem | None
+    division: FTItem | None
+    cardholders: FTItemReference | None
+    serverDisplayName: str | None
+    children: list[FTLinkItem] | None
+    personalDataDefinitions: list[FTLinkItem] | None
+    visitor: bool | None
+    escortVisitors: bool | None
+    lockUnlockAccessZones: bool | None
+    enterDuringLockdown: bool | None
+    firstCardUnlock: bool | None
+    overrideAperioPrivacy: bool | None
+    aperioOfflineAccess: bool | None
+    disarmAlarmZones: bool | None
+    armAlarmZones: bool | None
+    hvLfFenceZones: bool | None
+    viewAlarms: bool | None
+    shunt: bool | None
+    lockOutFenceZones: bool | None
+    cancelFenceZoneLockout: bool | None
+    ackAll: bool | None
+    ackBelowHigh: bool | None
+    selectAlarmZone: bool | None
+    armWhileAlarm: bool | None
+    armWhileActiveAlarm: bool | None
+    isolateAlarmZones: bool | None
+    access: list[FTLinkItem] | None
+    alarmZones: list[FTLinkItem] | None
+
+    @classmethod
+    def from_dict(cls, kwargs: dict[str, Any]) -> FTAccessGroup:
+        """Return FTAccessGroup object from dict."""
+        return from_dict(data_class=FTAccessGroup, data=kwargs)
 
 
 @dataclass

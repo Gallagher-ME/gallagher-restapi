@@ -22,15 +22,9 @@ async def main(host: str, port: int, api_key: str) -> None:
                 httpx_client=httpx_client,
             )
             await client.initialize()
-            if divisions := await client.get_item("Division", "ICAD"):
-                _LOGGER.info(divisions[0])
-                # new_cardholder = FTCardholder(
-                #     firstName="Rami",
-                #     lastName="1",
-                #     division=FTItemReference(href=divisions[0].href),
-                # )
-                # if await cardholder_client.create_cardholder(new_cardholder):
-                #     _LOGGER.info("New cardholder created successfully.")
+            if divisions := await client.get_item("Division", "Test"):
+                access_group = await client.get_access_group(divisions=["1311"])
+                _LOGGER.info(access_group)
     except gallagher_restapi.GllApiError as err:
         _LOGGER.error(err)
     try:
