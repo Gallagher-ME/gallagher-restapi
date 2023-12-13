@@ -110,6 +110,7 @@ class FTItem:
     name: str = ""
     href: str = ""
     type: dict = field(default_factory=dict)
+    division: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -176,21 +177,41 @@ class FTAccessGroupMembership:
     @property
     def to_dict(self) -> dict[str, Any]:
         """Return json string for post and update."""
-        _dict: dict[str, Any] = {"accessGroup": {"href": self.href}}
-        if active_from := getattr(self, "active_from", None):
-            _dict["from"] = f"{active_from.isoformat()}Z"
-        if active_until := getattr(self, "active_until", None):
-            _dict["until"] = f"{active_until.isoformat()}Z"
+        _dict: dict[str, Any] = {}
+        if self.href:
+            _dict["href"] = self.href
+        if getattr(self, "accessGroup", None) is not None:
+            _dict["accessGroup"] = {"href": self.accessGroup.href}
+        if getattr(self, "active_from", None) is not None:
+            _dict["from"] = f"{self.active_from.isoformat()}Z"
+        if getattr(self, "active_until", None) is not None:
+            _dict["until"] = f"{self.active_until.isoformat()}Z"
         return _dict
 
     @classmethod
-    def assign_membership(
+    def add_membership(
         cls,
-        access_group: FTItem,
+        access_group: FTAccessGroup,
         active_from: datetime | None = None,
         active_until: datetime | None = None,
     ) -> FTAccessGroupMembership:
         """Create an FTAccessGroup item to assign."""
+        _cls = FTAccessGroupMembership()
+        _cls.accessGroup = FTLinkItem(name=access_group.name, href=access_group.href)
+        if active_from:
+            _cls.active_from = active_from
+        if active_until:
+            _cls.active_until = active_until
+        return _cls
+
+    @classmethod
+    def update_membership(
+        cls,
+        access_group: FTAccessGroupMembership,
+        active_from: datetime | None = None,
+        active_until: datetime | None = None,
+    ) -> FTAccessGroupMembership:
+        """Create an FTAccessGroup update item."""
         _cls = FTAccessGroupMembership(href=access_group.href)
         if active_from:
             _cls.active_from = active_from
@@ -201,7 +222,7 @@ class FTAccessGroupMembership:
     @classmethod
     def from_dict(cls, kwargs: dict[str, Any]) -> FTAccessGroupMembership:
         """Return FTAccessGroupMembership object from dict."""
-        _cls = FTAccessGroupMembership()
+        _cls = FTAccessGroupMembership(href=kwargs["href"])
 
         if status := kwargs.get("status"):
             _cls.status = FTStatus(**status)
@@ -435,7 +456,7 @@ FTCARDHOLDER_FIELDS: tuple[FTCardholderField, ...] = (
         from_dict=lambda val: [
             FTAccessGroupMembership.from_dict(access_group) for access_group in val
         ],
-        to_dict=lambda val: [card.to_dict for card in val],
+        to_dict=lambda val: [access_group.to_dict for access_group in val],
     ),
     # FTCardholderField(
     #     key="operator_groups",
@@ -451,7 +472,7 @@ FTCARDHOLDER_FIELDS: tuple[FTCardholderField, ...] = (
     #         FTCompetency(competency) for competency in val
     #     ],
     # ),
-    FTCardholderField(name="edit", from_dict=lambda val: FTItemReference(**val)),
+    # FTCardholderField(name="edit", from_dict=lambda val: FTItemReference(**val)),
     FTCardholderField(
         name="updateLocation",
         from_dict=lambda val: FTItemReference(**val),
@@ -548,10 +569,41 @@ class FTCardholder:
         return _cls
 
     @classmethod
-    def patch(cls, cardholder: FTCardholder, **kwargs: Any) -> FTCardholder:
+    def patch(
+        cls,
+        cardholder: FTCardholder,
+        add: list[FTCardholderCard | FTAccessGroupMembership] | None = None,
+        update: list[FTCardholderCard | FTAccessGroupMembership] | None = None,
+        remove: list[FTCardholderCard | FTAccessGroupMembership] | None = None,
+        **kwargs: Any,
+    ) -> FTCardholder:
         """Return FTCardholder object from dict."""
+        # TODO handle all fields that require a patch action like cards, access groups...
         _cls = FTCardholder()
         _cls.href = cardholder.href
+        _cls.cards = {}
+        _cls.accessGroups = {}
+
+        if add:
+            for item in add:
+                if isinstance(item, FTCardholderCard):
+                    _cls.cards.setdefault("add", []).append(item)
+                elif isinstance(item, FTAccessGroupMembership):
+                    _cls.accessGroups.setdefault("add", []).append(item)
+        if update:
+            for item in update:
+                if isinstance(item, FTCardholderCard):
+                    _cls.cards.setdefault("update", []).append(item)
+                elif isinstance(item, FTAccessGroupMembership):
+                    _cls.accessGroups.setdefault("update", []).append(item)
+        if remove:
+            for item in remove:
+                if isinstance(item, FTCardholderCard):
+                    _cls.cards.setdefault("remove", []).append(item)
+
+                elif isinstance(item, FTAccessGroupMembership):
+                    _cls.accessGroups.setdefault("remove", []).append(item)
+
         for key, value in kwargs.items():
             try:
                 setattr(_cls, key, value)

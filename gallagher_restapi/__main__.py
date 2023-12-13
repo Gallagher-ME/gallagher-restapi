@@ -1,12 +1,14 @@
 """cli interface for gallagher restapi."""
 import argparse
 import asyncio
+from datetime import datetime
 import logging
 import os
 
 import httpx
 
 import gallagher_restapi
+from gallagher_restapi.models import FTAccessGroupMembership, FTCardholder
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -22,11 +24,35 @@ async def main(host: str, port: int, api_key: str) -> None:
                 httpx_client=httpx_client,
             )
             await client.initialize()
-            if divisions := await client.get_item("Division", "Test"):
-                access_group = await client.get_access_group(divisions=["1311"])
+            if divisions := await client.get_item(item_type="Division", name="Test"):
+                access_group = await client.get_access_group(
+                    divisions=[divisions[0].id]
+                )
+
                 _LOGGER.info(access_group)
+            if cardholders := await client.get_cardholder(id="1366"):
+                cardholder = cardholders[0]
+                assert isinstance(cardholder.accessGroups, list)
+                cardholder_accessGroups = [
+                    group
+                    for group in cardholder.accessGroups
+                    if group.accessGroup.name == "Test"
+                ]
+                access_group_memebership = FTAccessGroupMembership.update_membership(
+                    cardholder_accessGroups[0], active_until=datetime(2024, 1, 1)
+                )
+                new_membership = FTAccessGroupMembership.add_membership(access_group[0])
+
+                cardholder_update = FTCardholder.patch(
+                    cardholder=cardholder,
+                    add=[new_membership],
+                    update=[access_group_memebership],
+                    remove=[cardholder_accessGroups[-1]],
+                )
+                await client.update_cardholder(cardholder_update)
+                _LOGGER.info(f"Successfully updated cardholder {cardholder.firstName}")
     except gallagher_restapi.GllApiError as err:
-        _LOGGER.error(err)
+        _LOGGER.error(f"Error: {err}")
     try:
         async with httpx.AsyncClient(verify=False) as httpx_client:
             client = gallagher_restapi.Client(
