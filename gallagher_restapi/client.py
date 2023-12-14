@@ -139,84 +139,108 @@ class Client:
 
     async def get_item(
         self,
-        item_type: str,
+        *,
+        id: str | None = None,
+        item_type: str | None = None,
         name: str | None = None,
         extra_fields: list[str] | None = None,
     ) -> list[FTItem]:
         """Get FTItems filtered by type and name."""
-        # We will force selecting type for now
-        if not (type_id := self._item_types.get(item_type)):
-            raise ValueError(f"Unknown item type: {item_type}")
-        params = {"type": type_id}
-        if name:
-            params["name"] = name
         items: list[FTItem] = []
-        if response := await self._async_request(
-            "GET",
-            self.api_features.href("items"),
-            params=params,
-            extra_fields=extra_fields,
-        ):
+        if id:
+            if response := await self._async_request(
+                "GET",
+                f"{self.api_features.href('items')}/{id}",
+                extra_fields=extra_fields,
+            ):
+                items = [FTItem(**response)]
+
+        else:
+            # We will force selecting type for now
+            if item_type is None or not (type_id := self._item_types.get(item_type)):
+                raise ValueError(f"Unknown item type: {item_type}")
+            params: dict[str, Any] = {"type": type_id}
+            if name:
+                params["name"] = name
+
+            response = await self._async_request(
+                "GET",
+                self.api_features.href("items"),
+                params=params,
+                extra_fields=extra_fields,
+            )
             items = [FTItem(**item) for item in response["results"]]
         return items
 
     async def get_access_zone(
         self,
+        *,
+        id: str | None = None,
         name: str | None = None,
         extra_fields: list[str] | None = None,
     ) -> list[FTItem]:
         """Get Access zones filtered by name."""
-        params: dict[str, str] = {}
-        if name:
-            params["name"] = name
-        items: list[FTItem] = []
-        if response := await self._async_request(
-            "GET",
-            self.api_features.href("access_zones"),
-            params=params,
-            extra_fields=extra_fields,
-        ):
-            items = [FTItem(**item) for item in response["results"]]
-        return items
+        access_zones: list[FTItem] = []
+        if id:
+            response: dict[str, Any] = await self._async_request(
+                "GET", f"{self.api_features.href('accessZones')}/{id}"
+            )
+            if response:
+                access_zones = [FTItem(**response)]
+        else:
+            params: dict[str, str] = {}
+            if name:
+                params["name"] = name
+            response = await self._async_request(
+                "GET",
+                self.api_features.href("accessZones"),
+                params=params,
+                extra_fields=extra_fields,
+            )
+            access_zones = [FTItem(**item) for item in response["results"]]
+        return access_zones
 
     async def get_access_group(
         self,
         *,
-        id: int | None = None,
+        id: str | None = None,
         name: str | None = None,
         divisions: list[FTItem | str] = [],
         extra_fields: list[str] | None = None,
     ) -> list[FTAccessGroup]:
         """Get Access groups filtered by name."""
+        access_groups: list[FTAccessGroup] = []
         if id:
             response: dict[str, Any] = await self._async_request(
                 "GET", f"{self.api_features.href('accessGroups')}/{id}"
             )
             if response:
-                return [FTAccessGroup.from_dict(response)]
+                access_groups = [FTAccessGroup.from_dict(response)]
+        else:
+            params: dict[str, str] = {}
+            if name:
+                params["name"] = name
+            if divisions:
+                params["division"] = ",".join(
+                    div.id if isinstance(div, FTItem) else div for div in divisions
+                )
 
-        params: dict[str, str] = {}
-        if name:
-            params["name"] = name
-        if divisions:
-            params["division"] = ",".join(
-                div.id if isinstance(div, FTItem) else div for div in divisions
+            response = await self._async_request(
+                "GET",
+                self.api_features.href("accessGroups"),
+                params=params,
+                extra_fields=extra_fields,
             )
-
-        response = await self._async_request(
-            "GET",
-            self.api_features.href("accessGroups"),
-            params=params,
-            extra_fields=extra_fields,
-        )
-        items = [FTAccessGroup.from_dict(item) for item in response["results"]]
-        return items
+            access_groups = [
+                FTAccessGroup.from_dict(item) for item in response["results"]
+            ]
+        return access_groups
 
     # Door methods
     async def get_door(
         self,
         *,
-        id: int | None = None,
+        id: str | None = None,
         name: str | None = None,
         description: str | None = None,
         sort: DoorSort = DoorSort.ID_ASC,
@@ -230,8 +254,7 @@ class Client:
                 "GET", f"{self.api_features.href('doors')}/{id}"
             )
             if response:
-                return [FTDoor.from_dict(response)]
-
+                doors = [FTDoor.from_dict(response)]
         else:
             params: dict[str, Any] = {"sort": sort}
             if name:
@@ -247,15 +270,14 @@ class Client:
                 params=params,
                 extra_fields=extra_fields,
             )
-            if response["results"]:
-                doors = [FTDoor.from_dict(door) for door in response["results"]]
+            doors = [FTDoor.from_dict(door) for door in response["results"]]
         return doors
 
     # Personal fields methods
     async def get_personal_data_field(
         self,
         *,
-        id: int | None = None,
+        id: str | None = None,
         name: str | None = None,
         extra_fields: list[str] | None = None,
     ) -> list[FTPersonalDataFieldDefinition]:
@@ -267,14 +289,13 @@ class Client:
             )
             if response:
                 pdfs = [FTPersonalDataFieldDefinition.from_dict(response)]
-            return pdfs
-
-        if response := await self._async_request(
-            "GET",
-            self.api_features.href("personalDataFields"),
-            params={"name": name} if name else None,
-            extra_fields=extra_fields,
-        ):
+        else:
+            response = await self._async_request(
+                "GET",
+                self.api_features.href("personalDataFields"),
+                params={"name": name} if name else None,
+                extra_fields=extra_fields,
+            )
             pdfs = [
                 FTPersonalDataFieldDefinition.from_dict(pdf)
                 for pdf in response["results"]
@@ -282,11 +303,18 @@ class Client:
 
         return pdfs
 
+    async def get_image_from_pdf(self, cardholder_id: str, pdf_id: str) -> str | None:
+        """Returns base64 string of the image field."""
+        url = f"{self.api_features.href('cardholders')}/{cardholder_id}/personal_data/{pdf_id}"
+        if response := await self._async_request("GET", url):
+            return base64.b64encode(response["result"]).decode("utf-8")
+        return None
+
     # Cardholder methods
     async def get_cardholder(
         self,
         *,
-        id: int | None = None,
+        id: str | None = None,
         name: str | None = None,
         pdfs: dict[str, str] | None = None,
         extra_fields: list[str] | None = None,
@@ -299,13 +327,7 @@ class Client:
             )
             if response:
                 cardholders = [FTCardholder.from_dict(response)]
-            return cardholders
         else:
-            if name and not isinstance(name, str):
-                raise ValueError("name field must be a string value.")
-            if pdfs and not isinstance(pdfs, dict):
-                raise ValueError("pdfs field must be a dict.")
-
             params: dict[str, str] = {}
             if name:
                 params = {"name": name}
@@ -327,19 +349,10 @@ class Client:
                 params=params,
                 extra_fields=extra_fields,
             )
-            if response["results"]:
-                cardholders = [
-                    FTCardholder.from_dict(cardholder)
-                    for cardholder in response["results"]
-                ]
+            cardholders = [
+                FTCardholder.from_dict(cardholder) for cardholder in response["results"]
+            ]
         return cardholders
-
-    async def get_image_from_pdf(self, cardholder_id: str, pdf_id: str) -> str | None:
-        """Returns base64 string of the image field."""
-        url = f"{self.api_features.href('cardholders')}/{cardholder_id}/personal_data/{pdf_id}"
-        if response := await self._async_request("GET", url):
-            return base64.b64encode(response["result"]).decode("utf-8")
-        return None
 
     async def add_cardholder(self, cardholder: FTCardholder) -> FTItemReference:
         """Add a new cardholder in Gallagher."""
@@ -348,9 +361,9 @@ class Client:
         )
         return FTItemReference(response["location"])
 
-    async def update_cardholder(self, cardholder: FTCardholder) -> dict[str, Any]:
+    async def update_cardholder(self, cardholder: FTCardholder) -> None:
         """Update existing cardholder in Gallagher."""
-        return await self._async_request(
+        await self._async_request(
             "PATCH",
             cardholder.href,
             data=cardholder.as_dict(),
@@ -395,15 +408,15 @@ class Client:
     async def get_new_events(
         self,
         event_filter: EventFilter | None = None,
-        updates: str | None = None,
+        next: str | None = None,
     ) -> tuple[list[FTEvent], str]:
         """
         Return new events filtered by params and the link for the next event search.
         """
-        if updates is not None:
+        if next is not None:
             response = await self._async_request(
                 "GET",
-                updates,
+                next,
             )
         else:
             response = await self._async_request(
@@ -411,11 +424,12 @@ class Client:
                 self.api_features.href("events"),
                 params=event_filter.as_dict() if event_filter else None,
             )
+        _LOGGER.debug(response)
         events: list[FTEvent] = [
             FTEvent.from_dict(event) for event in response["events"]
         ]
-        next: str = response["next"]["href"]
-        return (events, next)
+        next_href: str = response["next"]["href"]
+        return (events, next_href)
 
     async def yield_new_events(
         self, event_filter: EventFilter | None = None
@@ -443,6 +457,6 @@ class Client:
         response = await self._async_request(
             "POST", self.api_features.href("events"), data=event.as_dict()
         )
-        if href := response.get("location"):
-            return href
+        if "location" in response:
+            return FTItemReference(response["location"])
         return None

@@ -14,9 +14,17 @@ awesomeversion = "^23.8.0"
 dacite = "^1.8.1"
 
 
+[tool.poetry.group.dev.dependencies]
+types-pytz = "^2023.3.1.1"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
 gll_api = "gallagher_restapi.__main__:main"
+
+[tool.ruff]
+ignore = [
+"E731",  # do not assign a lambda expression, use a def
+]

@@ -104,11 +104,11 @@ async def main(host: str, port: int, api_key: str) -> None:
             )
             await client.initialize()
             source = await client.get_door(name="Dubai office")
-            cardholder = await client.get_cardholder(name="Rami Mousleh")
+            cardholders = await client.get_cardholder(name="Rami Mousleh")
             event_post = gallagher_restapi.EventPost(
                 eventType=client.event_types["Key Returned"],
                 source=source[0],
-                cardholder=cardholder[0],
+                cardholder=cardholders[0],
                 message="A Key has been returned",
                 details="Key number (123)",
             )
