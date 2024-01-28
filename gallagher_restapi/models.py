@@ -41,6 +41,7 @@ class FTApiFeatures:
     cardTypes: dict[str, Any]
     competencies: dict[str, Any]
     dayCategories: dict[str, Any]
+    divisions: dict[str, Any]
     doors: dict[str, Any]
     elevators: dict[str, Any]
     events: dict[str, Any]
