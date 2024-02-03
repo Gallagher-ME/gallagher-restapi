@@ -273,6 +273,10 @@ class Client:
             doors = [FTDoor.from_dict(door) for door in response["results"]]
         return doors
 
+    async def open_door(self, door: FTDoor) -> None:
+        """Open door."""
+        await self._async_request("POST", door.commands["open"].href)
+
     # Personal fields methods
     async def get_personal_data_field(
         self,
