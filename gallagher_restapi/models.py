@@ -998,3 +998,14 @@ class FTDoor:
             if value := kwargs.get(door_field.name):
                 setattr(_cls, door_field.name, door_field.from_dict(value))
         return _cls
+
+
+# Item status and overrides
+@dataclass
+class FTItemStatus:
+    """Item status class."""
+
+    id: str
+    status: str
+    statusText: str
+    statusFlags: list[str]
