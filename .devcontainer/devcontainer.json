@@ -15,20 +15,15 @@
     "vscode": {
       "extensions": [
         "visualstudioexptteam.vscodeintellicode",
-        "redhat.vscode-yaml",
         "esbenp.prettier-vscode",
         "GitHub.vscode-pull-request-github",
         "eamodio.gitlens",
-        "ms-python.black-formatter"
+        "charliermarsh.ruff"
       ],
       "settings": {
         "editor.tabSize": 2,
         "editor.renderWhitespace": "boundary",
-        "[python]": {
-          "editor.defaultFormatter": "ms-python.black-formatter"
-        },
         "python.linting.enabled": true,
-        "python.formatting.provider": "black",
         "editor.formatOnPaste": false,
         "editor.formatOnSave": true,
         "editor.formatOnType": true,
