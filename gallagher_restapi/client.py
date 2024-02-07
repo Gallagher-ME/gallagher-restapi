@@ -79,6 +79,8 @@ class Client:
         data: dict[str, Any] | None = None,
         params: dict[str, Any] | None = None,
         extra_fields: list[str] | None = None,
+        name: str | None = None,
+        description: str | None = None,
         division: list[str] | None = None,
         sort: SortMethod | None = None,
         top: int | None = None,
@@ -89,6 +91,10 @@ class Client:
             params["fields"] = ",".join(extra_fields)
         if division:
             params["division"] = ",".join(division)
+        if name:
+            params["name"] = name
+        if description:
+            params["description"] = description
         if sort:
             params["sort"] = sort
         if top:
@@ -176,15 +182,12 @@ class Client:
             # We will force selecting type for now
             if item_type is None or not (type_id := self._item_types.get(item_type)):
                 raise ValueError(f"Unknown item type: {item_type}")
-            params: dict[str, Any] = {"type": type_id}
-            if name:
-                params["name"] = name
-
             response = await self._async_request(
                 HTTPMethods.GET,
                 self.api_features.href("items"),
-                params=params,
+                params={"type": type_id},
                 extra_fields=extra_fields,
+                name=name,
                 division=division,
                 sort=sort,
                 top=top,
@@ -198,6 +201,7 @@ class Client:
         *,
         id: str | None = None,
         name: str | None = None,
+        description: str | None = None,
         extra_fields: list[str] | None = None,
         division: list[str] | None = None,
         sort: SortMethod | None = None,
@@ -214,14 +218,12 @@ class Client:
             if response:
                 access_zones = [FTAccessZone.from_dict(response)]
         else:
-            params: dict[str, str] = {}
-            if name:
-                params["name"] = name
             response = await self._async_request(
                 HTTPMethods.GET,
                 self.api_features.href("accessZones"),
-                params=params,
                 extra_fields=extra_fields,
+                name=name,
+                description=description,
                 division=division,
                 sort=sort,
                 top=top,
@@ -256,6 +258,7 @@ class Client:
         *,
         id: str | None = None,
         name: str | None = None,
+        description: str | None = None,
         extra_fields: list[str] | None = None,
         division: list[str] | None = None,
         sort: SortMethod | None = None,
@@ -272,14 +275,12 @@ class Client:
             if response:
                 alarm_zones = [FTAlarmZone.from_dict(response)]
         else:
-            params: dict[str, str] = {}
-            if name:
-                params["name"] = name
             response = await self._async_request(
                 HTTPMethods.GET,
                 self.api_features.href("alarmZones"),
-                params=params,
                 extra_fields=extra_fields,
+                name=name,
+                description=description,
                 division=division,
                 sort=sort,
                 top=top,
@@ -309,6 +310,7 @@ class Client:
         *,
         id: str | None = None,
         name: str | None = None,
+        description: str | None = None,
         extra_fields: list[str] | None = None,
         division: list[str] | None = None,
         sort: SortMethod | None = None,
@@ -323,15 +325,12 @@ class Client:
             if response:
                 access_groups = [FTAccessGroup.from_dict(response)]
         else:
-            params: dict[str, str] = {}
-            if name:
-                params["name"] = name
-
             response = await self._async_request(
                 HTTPMethods.GET,
                 self.api_features.href("accessGroups"),
-                params=params,
                 extra_fields=extra_fields,
+                name=name,
+                description=description,
                 division=division,
                 sort=sort,
                 top=top,
@@ -362,17 +361,12 @@ class Client:
             if response:
                 doors = [FTDoor.from_dict(response)]
         else:
-            params: dict[str, Any] = {}
-            if name:
-                params["name"] = name
-            if description:
-                params["description"] = description
-
             response = await self._async_request(
                 HTTPMethods.GET,
                 self.api_features.href("doors"),
-                params=params,
                 extra_fields=extra_fields,
+                name=name,
+                description=description,
                 division=division,
                 sort=sort,
                 top=top,
