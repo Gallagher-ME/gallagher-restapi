@@ -7,8 +7,8 @@ from ssl import SSLError
 from typing import Any, AsyncIterator
 
 import httpx
-
 from awesomeversion import AwesomeVersion
+
 from .exceptions import (
     ConnectError,
     GllApiError,
@@ -19,6 +19,7 @@ from .exceptions import (
 from .models import (
     DoorSort,
     EventFilter,
+    EventPost,
     FTAccessGroup,
     FTAccessZone,
     FTApiFeatures,
@@ -26,9 +27,9 @@ from .models import (
     FTDoor,
     FTEvent,
     FTEventGroup,
-    EventPost,
     FTItem,
     FTItemReference,
+    FTItemStatus,
     FTPersonalDataFieldDefinition,
 )
 
@@ -484,3 +485,26 @@ class Client:
         if "location" in response:
             return FTItemReference(response["location"])
         return None
+
+    # Status and override methods
+
+    async def get_item_status(
+        self,
+        item_ids: list[str] | None = None,
+        next_link: FTItemReference | None = None,
+    ) -> tuple[list[FTItemStatus], FTItemReference]:
+        """Subscribe to items status and return list of updates with next link."""
+        if next_link:
+            response = await self._async_request("GET", next_link.href)
+        elif item_ids:
+            response = await self._async_request(
+                "POST",
+                self.api_features.href("items/updates"),
+                data={"itemIds": item_ids},
+            )
+        else:
+            raise ValueError("item ids or a next link must be provided")
+        return (
+            [FTItemStatus(**item) for item in response["updates"]],
+            FTItemReference(**response["next"]),
+        )
