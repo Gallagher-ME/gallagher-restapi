@@ -173,6 +173,41 @@ class FTAccessZone:
 
 
 @dataclass
+class FTAlarmZoneCommands:
+    """FTAlarmZone commands base class."""
+
+    arm: FTItemReference
+    disarm: FTItemReference
+    user1: FTItemReference
+    user2: FTItemReference
+    armHighVoltage: FTItemReference | None
+    armLowFeel: FTItemReference | None
+    cancel: FTItemReference | None
+
+
+@dataclass
+class FTAlarmZone:
+    """FTAlarmZone item base class."""
+
+    id: str
+    href: str
+    name: str
+    description: str | None
+    division: FTItem | None
+    shortName: str | None
+    notes: str | None
+    updates: FTItemReference | None
+    statusFlags: list[str] | None
+    connectedController: FTItem | None
+    commands: FTAlarmZoneCommands | None
+
+    @classmethod
+    def from_dict(cls, kwargs: dict[str, Any]) -> FTAlarmZone:
+        """Return FTAlarmZone object from dict."""
+        return from_dict(data_class=FTAlarmZone, data=kwargs)
+
+
+@dataclass
 class FTAccessGroup:
     """FTAccessGroup item base class."""
 

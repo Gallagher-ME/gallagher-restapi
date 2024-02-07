@@ -22,6 +22,7 @@ from .models import (
     EventPost,
     FTAccessGroup,
     FTAccessZone,
+    FTAlarmZone,
     FTApiFeatures,
     FTCardholder,
     FTDoor,
@@ -184,7 +185,7 @@ class Client:
         extra_fields: list[str] | None = None,
     ) -> list[FTAccessZone]:
         """Get Access zones filtered by name."""
-        access_zones: list[FTItem] = []
+        access_zones: list[FTAccessZone] = []
         if id:
             response: dict[str, Any] = await self._async_request(
                 "GET",
@@ -216,8 +217,62 @@ class Client:
         zone_count: int | None = None,
     ) -> None:
         """POST an override to an access zone."""
+        data: dict[str, Any] = {}
+        if end_time:
+            data["endTime"] = f"{end_time.isoformat()}Z"
+        if zone_count:
+            data["zoneCount"] = zone_count
         await self._async_request(
-            "POST", command.href, data={"endTime": end_time, "zoneCount": zone_count}
+            "POST",
+            command.href,
+            data=data if data else None,
+        )
+
+    # Alarm zone methods
+    async def get_alarm_zone(
+        self,
+        *,
+        id: str | None = None,
+        name: str | None = None,
+        extra_fields: list[str] | None = None,
+    ) -> list[FTAlarmZone]:
+        """Return list of Alarm zone items."""
+        alarm_zones: list[FTAlarmZone] = []
+        if id:
+            response: dict[str, Any] = await self._async_request(
+                "GET",
+                f"{self.api_features.href('alarmZones')}/{id}",
+                extra_fields=extra_fields,
+            )
+            if response:
+                alarm_zones = [FTAlarmZone.from_dict(response)]
+        else:
+            params: dict[str, str] = {}
+            if name:
+                params["name"] = name
+            response = await self._async_request(
+                "GET",
+                self.api_features.href("alarmZones"),
+                params=params,
+                extra_fields=extra_fields,
+            )
+            alarm_zones = [FTAlarmZone.from_dict(item) for item in response["results"]]
+        return alarm_zones
+
+    async def override_alarm_zone(
+        self,
+        command: FTItemReference,
+        *,
+        end_time: datetime | None = None,
+    ) -> None:
+        """POST an override to an access zone."""
+        data: dict[str, Any] = {}
+        if end_time:
+            data["endTime"] = f"{end_time.isoformat()}Z"
+        await self._async_request(
+            "POST",
+            command.href,
+            data=data if data else None,
         )
 
     # Access group methods
