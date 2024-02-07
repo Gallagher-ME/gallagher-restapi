@@ -1,6 +1,7 @@
 """Gallagher REST api python library."""
 import asyncio
 import base64
+from datetime import datetime
 import logging
 from ssl import SSLError
 from typing import Any, AsyncIterator
@@ -19,6 +20,7 @@ from .models import (
     DoorSort,
     EventFilter,
     FTAccessGroup,
+    FTAccessZone,
     FTApiFeatures,
     FTCardholder,
     FTDoor,
@@ -172,21 +174,24 @@ class Client:
             items = [FTItem(**item) for item in response["results"]]
         return items
 
+    # Access zone methods
     async def get_access_zone(
         self,
         *,
         id: str | None = None,
         name: str | None = None,
         extra_fields: list[str] | None = None,
-    ) -> list[FTItem]:
+    ) -> list[FTAccessZone]:
         """Get Access zones filtered by name."""
         access_zones: list[FTItem] = []
         if id:
             response: dict[str, Any] = await self._async_request(
-                "GET", f"{self.api_features.href('accessZones')}/{id}"
+                "GET",
+                f"{self.api_features.href('accessZones')}/{id}",
+                extra_fields=extra_fields,
             )
             if response:
-                access_zones = [FTItem(**response)]
+                access_zones = [FTAccessZone.from_dict(response)]
         else:
             params: dict[str, str] = {}
             if name:
@@ -197,9 +202,24 @@ class Client:
                 params=params,
                 extra_fields=extra_fields,
             )
-            access_zones = [FTItem(**item) for item in response["results"]]
+            access_zones = [
+                FTAccessZone.from_dict(item) for item in response["results"]
+            ]
         return access_zones
 
+    async def override_access_zone(
+        self,
+        command: FTItemReference,
+        *,
+        end_time: datetime | None = None,
+        zone_count: int | None = None,
+    ) -> None:
+        """POST an override to an access zone."""
+        await self._async_request(
+            "POST", command.href, data={"endTime": end_time, "zoneCount": zone_count}
+        )
+
+    # Access group methods
     async def get_access_group(
         self,
         *,

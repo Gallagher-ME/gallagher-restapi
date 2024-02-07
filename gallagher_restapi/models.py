@@ -12,6 +12,13 @@ from dacite import from_dict
 import pytz
 
 
+# class HTTPMethods(StrEnum):
+#     GET = "get"
+#     POST = "post"
+#     PATCH = "patch"
+#     DELETE = "delete"
+
+
 class PatchAction(str, Enum):
     """Enumerate patch actions."""
 
@@ -120,6 +127,49 @@ class FTLinkItem:
 
     name: str
     href: str = ""
+
+
+@dataclass
+class FTAccessZoneCommands:
+    """FTAccessZone commands base class."""
+
+    free: FTItemReference
+    freePin: FTItemReference
+    secure: FTItemReference
+    securePin: FTItemReference
+    codeOnly: FTItemReference
+    codeOnlyPin: FTItemReference
+    dualAuth: FTItemReference
+    dualAuthPin: FTItemReference
+    forgiveAntiPassback: FTItemReference | None
+    setZoneCount: FTItemReference | None
+    lockDown: FTItemReference
+    cancelLockDown: FTItemReference
+    cancel: FTItemReference
+
+
+@dataclass
+class FTAccessZone:
+    """FTAccessZone item base class."""
+
+    id: str
+    href: str
+    name: str
+    description: str | None
+    division: FTItem | None
+    doors: list[FTLinkItem] | None
+    zoneCount: int | None
+    notes: str | None
+    shortName: str | None
+    updates: FTItemReference | None
+    statusFlags: list[str] | None
+    connectedController: FTItem | None
+    commands: FTAccessZoneCommands | None
+
+    @classmethod
+    def from_dict(cls, kwargs: dict[str, Any]) -> FTAccessZone:
+        """Return FTAccessZone object from dict."""
+        return from_dict(data_class=FTAccessZone, data=kwargs)
 
 
 @dataclass
