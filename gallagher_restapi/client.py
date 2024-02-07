@@ -1,8 +1,8 @@
 """Gallagher REST api python library."""
 import asyncio
 import base64
-from datetime import datetime
 import logging
+from datetime import datetime
 from ssl import SSLError
 from typing import Any, AsyncIterator
 
@@ -32,6 +32,7 @@ from .models import (
     FTItemReference,
     FTItemStatus,
     FTPersonalDataFieldDefinition,
+    HTTPMethods,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -123,7 +124,7 @@ class Client:
 
     async def initialize(self) -> None:
         """Connect to Server and initialize data."""
-        response = await self._async_request("GET", f"{self.server_url}/api/")
+        response = await self._async_request(HTTPMethods.GET, f"{self.server_url}/api/")
         self.api_features = FTApiFeatures(**response["features"])
         self.version = AwesomeVersion(response["version"])
         await self._update_item_types()
@@ -132,7 +133,7 @@ class Client:
     async def _update_item_types(self) -> None:
         """Get FTItem types."""
         response = await self._async_request(
-            "GET", self.api_features.href("items/itemTypes")
+            HTTPMethods.GET, self.api_features.href("items/itemTypes")
         )
         if response.get("itemTypes"):
             self._item_types = {
@@ -153,7 +154,7 @@ class Client:
         items: list[FTItem] = []
         if id:
             if response := await self._async_request(
-                "GET",
+                HTTPMethods.GET,
                 f"{self.api_features.href('items')}/{id}",
                 extra_fields=extra_fields,
             ):
@@ -168,7 +169,7 @@ class Client:
                 params["name"] = name
 
             response = await self._async_request(
-                "GET",
+                HTTPMethods.GET,
                 self.api_features.href("items"),
                 params=params,
                 extra_fields=extra_fields,
@@ -188,7 +189,7 @@ class Client:
         access_zones: list[FTAccessZone] = []
         if id:
             response: dict[str, Any] = await self._async_request(
-                "GET",
+                HTTPMethods.GET,
                 f"{self.api_features.href('accessZones')}/{id}",
                 extra_fields=extra_fields,
             )
@@ -199,7 +200,7 @@ class Client:
             if name:
                 params["name"] = name
             response = await self._async_request(
-                "GET",
+                HTTPMethods.GET,
                 self.api_features.href("accessZones"),
                 params=params,
                 extra_fields=extra_fields,
@@ -223,7 +224,7 @@ class Client:
         if zone_count:
             data["zoneCount"] = zone_count
         await self._async_request(
-            "POST",
+            HTTPMethods.POST,
             command.href,
             data=data if data else None,
         )
@@ -240,7 +241,7 @@ class Client:
         alarm_zones: list[FTAlarmZone] = []
         if id:
             response: dict[str, Any] = await self._async_request(
-                "GET",
+                HTTPMethods.GET,
                 f"{self.api_features.href('alarmZones')}/{id}",
                 extra_fields=extra_fields,
             )
@@ -251,7 +252,7 @@ class Client:
             if name:
                 params["name"] = name
             response = await self._async_request(
-                "GET",
+                HTTPMethods.GET,
                 self.api_features.href("alarmZones"),
                 params=params,
                 extra_fields=extra_fields,
@@ -270,7 +271,7 @@ class Client:
         if end_time:
             data["endTime"] = f"{end_time.isoformat()}Z"
         await self._async_request(
-            "POST",
+            HTTPMethods.POST,
             command.href,
             data=data if data else None,
         )
@@ -288,7 +289,7 @@ class Client:
         access_groups: list[FTAccessGroup] = []
         if id:
             response: dict[str, Any] = await self._async_request(
-                "GET", f"{self.api_features.href('accessGroups')}/{id}"
+                HTTPMethods.GET, f"{self.api_features.href('accessGroups')}/{id}"
             )
             if response:
                 access_groups = [FTAccessGroup.from_dict(response)]
@@ -302,7 +303,7 @@ class Client:
                 )
 
             response = await self._async_request(
-                "GET",
+                HTTPMethods.GET,
                 self.api_features.href("accessGroups"),
                 params=params,
                 extra_fields=extra_fields,
@@ -327,7 +328,7 @@ class Client:
         doors: list[FTDoor] = []
         if id:
             response: dict[str, Any] = await self._async_request(
-                "GET", f"{self.api_features.href('doors')}/{id}"
+                HTTPMethods.GET, f"{self.api_features.href('doors')}/{id}"
             )
             if response:
                 doors = [FTDoor.from_dict(response)]
@@ -341,7 +342,7 @@ class Client:
                 params["division"] = ",".join(div.id for div in divisions)
 
             response = await self._async_request(
-                "GET",
+                HTTPMethods.GET,
                 self.api_features.href("doors"),
                 params=params,
                 extra_fields=extra_fields,
@@ -351,7 +352,7 @@ class Client:
 
     async def open_door(self, door: FTDoor) -> None:
         """Open door."""
-        await self._async_request("POST", door.commands["open"].href)
+        await self._async_request(HTTPMethods.POST, door.commands["open"].href)
 
     # Personal fields methods
     async def get_personal_data_field(
@@ -365,13 +366,13 @@ class Client:
         pdfs: list[FTPersonalDataFieldDefinition] = []
         if id:
             response: dict[str, Any] = await self._async_request(
-                "GET", f"{self.api_features.href('personalDataFields')}/{id}"
+                HTTPMethods.GET, f"{self.api_features.href('personalDataFields')}/{id}"
             )
             if response:
                 pdfs = [FTPersonalDataFieldDefinition.from_dict(response)]
         else:
             response = await self._async_request(
-                "GET",
+                HTTPMethods.GET,
                 self.api_features.href("personalDataFields"),
                 params={"name": name} if name else None,
                 extra_fields=extra_fields,
@@ -386,7 +387,7 @@ class Client:
     async def get_image_from_pdf(self, cardholder_id: str, pdf_id: str) -> str | None:
         """Returns base64 string of the image field."""
         url = f"{self.api_features.href('cardholders')}/{cardholder_id}/personal_data/{pdf_id}"
-        if response := await self._async_request("GET", url):
+        if response := await self._async_request(HTTPMethods.GET, url):
             return base64.b64encode(response["result"]).decode("utf-8")
         return None
 
@@ -403,7 +404,7 @@ class Client:
         cardholders: list[FTCardholder] = []
         if id:
             response: dict[str, Any] = await self._async_request(
-                "GET", f"{self.api_features.href('cardholders')}/{id}"
+                HTTPMethods.GET, f"{self.api_features.href('cardholders')}/{id}"
             )
             if response:
                 cardholders = [FTCardholder.from_dict(response)]
@@ -424,7 +425,7 @@ class Client:
                     params.update({f"pdf_{pdf_field[0].id}": value})
 
             response = await self._async_request(
-                "GET",
+                HTTPMethods.GET,
                 self.api_features.href("cardholders"),
                 params=params,
                 extra_fields=extra_fields,
@@ -437,14 +438,16 @@ class Client:
     async def add_cardholder(self, cardholder: FTCardholder) -> FTItemReference:
         """Add a new cardholder in Gallagher."""
         response = await self._async_request(
-            "POST", self.api_features.href("cardholders"), data=cardholder.as_dict()
+            HTTPMethods.POST,
+            self.api_features.href("cardholders"),
+            data=cardholder.as_dict(),
         )
         return FTItemReference(response["location"])
 
     async def update_cardholder(self, cardholder: FTCardholder) -> None:
         """Update existing cardholder in Gallagher."""
         await self._async_request(
-            "PATCH",
+            HTTPMethods.PATCH,
             cardholder.href,
             data=cardholder.as_dict(),
         )
@@ -452,7 +455,7 @@ class Client:
     async def remove_cardholder(self, cardholder: FTCardholder) -> None:
         """Remove existing cardholder in Gallagher."""
         await self._async_request(
-            "DELETE",
+            HTTPMethods.DELETE,
             cardholder.href,
         )
 
@@ -460,7 +463,7 @@ class Client:
     async def _update_event_types(self) -> None:
         """Fetch list of event groups and types from server."""
         response = await self._async_request(
-            "GET", self.api_features.href("events/eventGroups")
+            HTTPMethods.GET, self.api_features.href("events/eventGroups")
         )
 
         for item in response["eventGroups"]:
@@ -478,7 +481,7 @@ class Client:
         """Return list of events filtered by params."""
         events: list[FTEvent] = []
         if response := await self._async_request(
-            "GET",
+            HTTPMethods.GET,
             self.api_features.href("events"),
             params=event_filter.as_dict() if event_filter else None,
         ):
@@ -495,12 +498,12 @@ class Client:
         """
         if next is not None:
             response = await self._async_request(
-                "GET",
+                HTTPMethods.GET,
                 next,
             )
         else:
             response = await self._async_request(
-                "GET",
+                HTTPMethods.GET,
                 self.api_features.href("events"),
                 params=event_filter.as_dict() if event_filter else None,
             )
@@ -516,7 +519,7 @@ class Client:
     ) -> AsyncIterator[list[FTEvent]]:
         """Yield a list of new events filtered by params."""
         response = await self._async_request(
-            "GET",
+            HTTPMethods.GET,
             self.api_features.href("events/updates"),
             params=event_filter.as_dict() if event_filter else None,
         )
@@ -527,7 +530,7 @@ class Client:
             # Check if next link should be called,
             # how to tell if there are more events in next link
             response = await self._async_request(
-                "GET",
+                HTTPMethods.GET,
                 response["updates"]["href"],
                 params=event_filter.as_dict() if event_filter else None,
             )
@@ -535,7 +538,7 @@ class Client:
     async def push_event(self, event: EventPost) -> FTItemReference | None:
         """Push a new event to Gallagher and return the event href."""
         response = await self._async_request(
-            "POST", self.api_features.href("events"), data=event.as_dict()
+            HTTPMethods.POST, self.api_features.href("events"), data=event.as_dict()
         )
         if "location" in response:
             return FTItemReference(response["location"])
@@ -550,10 +553,10 @@ class Client:
     ) -> tuple[list[FTItemStatus], FTItemReference]:
         """Subscribe to items status and return list of updates with next link."""
         if next_link:
-            response = await self._async_request("GET", next_link.href)
+            response = await self._async_request(HTTPMethods.GET, next_link.href)
         elif item_ids:
             response = await self._async_request(
-                "POST",
+                HTTPMethods.POST,
                 self.api_features.href("items/updates"),
                 data={"itemIds": item_ids},
             )

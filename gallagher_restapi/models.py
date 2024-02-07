@@ -5,35 +5,35 @@ import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any, cast
-from dacite import from_dict
 
 import pytz
+from dacite import from_dict
 
 
-# class HTTPMethods(StrEnum):
-#     GET = "get"
-#     POST = "post"
-#     PATCH = "patch"
-#     DELETE = "delete"
+class HTTPMethods(StrEnum):
+    GET = "GET"
+    POST = "POST"
+    PATCH = "PATCH"
+    DELETE = "DELETE"
 
 
-class PatchAction(str, Enum):
+class PatchAction(StrEnum):
     """Enumerate patch actions."""
 
-    ADD: str = "add"
-    UPDATE: str = "update"
-    REMOVE: str = "remove"
+    ADD = "add"
+    UPDATE = "update"
+    REMOVE = "remove"
 
 
-class DoorSort(str, Enum):
+class DoorSort(StrEnum):
     """Enumerate door sorting."""
 
-    ID_ASC: str = "id"
-    ID_DSC: str = "-id"
-    NAME_ASC: str = "name"
-    NAME_DSC: str = "-name"
+    ID_ASC = "id"
+    ID_DSC = "-id"
+    NAME_ASC = "name"
+    NAME_DSC = "-name"
 
 
 @dataclass
