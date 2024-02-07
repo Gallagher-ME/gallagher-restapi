@@ -27,7 +27,7 @@ class PatchAction(StrEnum):
     REMOVE = "remove"
 
 
-class DoorSort(StrEnum):
+class SortMethod(StrEnum):
     """Enumerate door sorting."""
 
     ID_ASC = "id"

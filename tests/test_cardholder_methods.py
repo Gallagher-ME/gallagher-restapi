@@ -3,7 +3,7 @@ from unittest.mock import patch
 import pytest
 
 from gallagher_restapi.client import Client
-from gallagher_restapi.models import FTCardholder, FTItemReference
+from gallagher_restapi.models import FTCardholder, FTItemReference, SortMethod
 
 
 @pytest.mark.asyncio
@@ -16,7 +16,7 @@ async def test_get_cardholder_by_id(gll_client: Client) -> None:
 @pytest.mark.asyncio
 async def test_get_cardholder_by_name(gll_client: Client) -> None:
     """Test getting cardholder by name."""
-    cardholder = await gll_client.get_cardholder(name="Justin")
+    cardholder = await gll_client.get_cardholder(name="Justin", top=1)
     assert len(cardholder) == 1
 
 

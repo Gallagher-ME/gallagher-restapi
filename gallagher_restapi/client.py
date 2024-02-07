@@ -17,7 +17,7 @@ from .exceptions import (
     UnauthorizedError,
 )
 from .models import (
-    DoorSort,
+    SortMethod,
     EventFilter,
     EventPost,
     FTAccessGroup,
@@ -77,13 +77,19 @@ class Client:
         endpoint: str,
         *,
         data: dict[str, Any] | None = None,
-        params: dict[str, str] | None = None,
+        params: dict[str, Any] | None = None,
         extra_fields: list[str] | None = None,
+        sort: SortMethod | None = None,
+        top: int | None = None,
     ) -> dict[str, Any]:
         """Send a http request and return the response."""
         params = params or {}
         if extra_fields:
             params["fields"] = ",".join(extra_fields)
+        if sort:
+            params["sort"] = sort
+        if top:
+            params["top"] = top
 
         _LOGGER.info(
             "Sending %s request to endpoint: %s, data: %s, params: %s",
@@ -149,6 +155,8 @@ class Client:
         item_type: str | None = None,
         name: str | None = None,
         extra_fields: list[str] | None = None,
+        sort: SortMethod | None = None,
+        top: int | None = None,
     ) -> list[FTItem]:
         """Get FTItems filtered by type and name."""
         items: list[FTItem] = []
@@ -173,6 +181,8 @@ class Client:
                 self.api_features.href("items"),
                 params=params,
                 extra_fields=extra_fields,
+                sort=sort,
+                top=top,
             )
             items = [FTItem(**item) for item in response["results"]]
         return items
@@ -184,6 +194,8 @@ class Client:
         id: str | None = None,
         name: str | None = None,
         extra_fields: list[str] | None = None,
+        sort: SortMethod | None = None,
+        top: int | None = None,
     ) -> list[FTAccessZone]:
         """Get Access zones filtered by name."""
         access_zones: list[FTAccessZone] = []
@@ -204,6 +216,8 @@ class Client:
                 self.api_features.href("accessZones"),
                 params=params,
                 extra_fields=extra_fields,
+                sort=sort,
+                top=top,
             )
             access_zones = [
                 FTAccessZone.from_dict(item) for item in response["results"]
@@ -236,6 +250,8 @@ class Client:
         id: str | None = None,
         name: str | None = None,
         extra_fields: list[str] | None = None,
+        sort: SortMethod | None = None,
+        top: int | None = None,
     ) -> list[FTAlarmZone]:
         """Return list of Alarm zone items."""
         alarm_zones: list[FTAlarmZone] = []
@@ -256,6 +272,8 @@ class Client:
                 self.api_features.href("alarmZones"),
                 params=params,
                 extra_fields=extra_fields,
+                sort=sort,
+                top=top,
             )
             alarm_zones = [FTAlarmZone.from_dict(item) for item in response["results"]]
         return alarm_zones
@@ -284,6 +302,8 @@ class Client:
         name: str | None = None,
         divisions: list[FTItem | str] = [],
         extra_fields: list[str] | None = None,
+        sort: SortMethod | None = None,
+        top: int | None = None,
     ) -> list[FTAccessGroup]:
         """Get Access groups filtered by name."""
         access_groups: list[FTAccessGroup] = []
@@ -307,6 +327,8 @@ class Client:
                 self.api_features.href("accessGroups"),
                 params=params,
                 extra_fields=extra_fields,
+                sort=sort,
+                top=top,
             )
             access_groups = [
                 FTAccessGroup.from_dict(item) for item in response["results"]
@@ -320,9 +342,10 @@ class Client:
         id: str | None = None,
         name: str | None = None,
         description: str | None = None,
-        sort: DoorSort = DoorSort.ID_ASC,
         divisions: list[FTItem] = [],
         extra_fields: list[str] | None = None,
+        sort: SortMethod | None = None,
+        top: int | None = None,
     ) -> list[FTDoor]:
         """Return list of doors."""
         doors: list[FTDoor] = []
@@ -333,7 +356,7 @@ class Client:
             if response:
                 doors = [FTDoor.from_dict(response)]
         else:
-            params: dict[str, Any] = {"sort": sort}
+            params: dict[str, Any] = {}
             if name:
                 params["name"] = name
             if description:
@@ -346,6 +369,8 @@ class Client:
                 self.api_features.href("doors"),
                 params=params,
                 extra_fields=extra_fields,
+                sort=sort,
+                top=top,
             )
             doors = [FTDoor.from_dict(door) for door in response["results"]]
         return doors
@@ -361,6 +386,8 @@ class Client:
         id: str | None = None,
         name: str | None = None,
         extra_fields: list[str] | None = None,
+        sort: SortMethod | None = None,
+        top: int | None = None,
     ) -> list[FTPersonalDataFieldDefinition]:
         """Return List of available personal data fields."""
         pdfs: list[FTPersonalDataFieldDefinition] = []
@@ -376,6 +403,8 @@ class Client:
                 self.api_features.href("personalDataFields"),
                 params={"name": name} if name else None,
                 extra_fields=extra_fields,
+                sort=sort,
+                top=top,
             )
             pdfs = [
                 FTPersonalDataFieldDefinition.from_dict(pdf)
@@ -399,6 +428,8 @@ class Client:
         name: str | None = None,
         pdfs: dict[str, str] | None = None,
         extra_fields: list[str] | None = None,
+        sort: SortMethod | None = None,
+        top: int | None = None,
     ) -> list[FTCardholder]:
         """Return list of cardholders."""
         cardholders: list[FTCardholder] = []
@@ -429,6 +460,8 @@ class Client:
                 self.api_features.href("cardholders"),
                 params=params,
                 extra_fields=extra_fields,
+                sort=sort,
+                top=top,
             )
             cardholders = [
                 FTCardholder.from_dict(cardholder) for cardholder in response["results"]
