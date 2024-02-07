@@ -79,6 +79,7 @@ class Client:
         data: dict[str, Any] | None = None,
         params: dict[str, Any] | None = None,
         extra_fields: list[str] | None = None,
+        division: list[str] | None = None,
         sort: SortMethod | None = None,
         top: int | None = None,
     ) -> dict[str, Any]:
@@ -86,6 +87,8 @@ class Client:
         params = params or {}
         if extra_fields:
             params["fields"] = ",".join(extra_fields)
+        if division:
+            params["division"] = ",".join(division)
         if sort:
             params["sort"] = sort
         if top:
@@ -155,6 +158,7 @@ class Client:
         item_type: str | None = None,
         name: str | None = None,
         extra_fields: list[str] | None = None,
+        division: list[str] | None = None,
         sort: SortMethod | None = None,
         top: int | None = None,
     ) -> list[FTItem]:
@@ -181,6 +185,7 @@ class Client:
                 self.api_features.href("items"),
                 params=params,
                 extra_fields=extra_fields,
+                division=division,
                 sort=sort,
                 top=top,
             )
@@ -194,6 +199,7 @@ class Client:
         id: str | None = None,
         name: str | None = None,
         extra_fields: list[str] | None = None,
+        division: list[str] | None = None,
         sort: SortMethod | None = None,
         top: int | None = None,
     ) -> list[FTAccessZone]:
@@ -216,6 +222,7 @@ class Client:
                 self.api_features.href("accessZones"),
                 params=params,
                 extra_fields=extra_fields,
+                division=division,
                 sort=sort,
                 top=top,
             )
@@ -250,6 +257,7 @@ class Client:
         id: str | None = None,
         name: str | None = None,
         extra_fields: list[str] | None = None,
+        division: list[str] | None = None,
         sort: SortMethod | None = None,
         top: int | None = None,
     ) -> list[FTAlarmZone]:
@@ -272,6 +280,7 @@ class Client:
                 self.api_features.href("alarmZones"),
                 params=params,
                 extra_fields=extra_fields,
+                division=division,
                 sort=sort,
                 top=top,
             )
@@ -300,8 +309,8 @@ class Client:
         *,
         id: str | None = None,
         name: str | None = None,
-        divisions: list[FTItem | str] = [],
         extra_fields: list[str] | None = None,
+        division: list[str] | None = None,
         sort: SortMethod | None = None,
         top: int | None = None,
     ) -> list[FTAccessGroup]:
@@ -317,16 +326,13 @@ class Client:
             params: dict[str, str] = {}
             if name:
                 params["name"] = name
-            if divisions:
-                params["division"] = ",".join(
-                    div.id if isinstance(div, FTItem) else div for div in divisions
-                )
 
             response = await self._async_request(
                 HTTPMethods.GET,
                 self.api_features.href("accessGroups"),
                 params=params,
                 extra_fields=extra_fields,
+                division=division,
                 sort=sort,
                 top=top,
             )
@@ -342,8 +348,8 @@ class Client:
         id: str | None = None,
         name: str | None = None,
         description: str | None = None,
-        divisions: list[FTItem] = [],
         extra_fields: list[str] | None = None,
+        division: list[str] | None = None,
         sort: SortMethod | None = None,
         top: int | None = None,
     ) -> list[FTDoor]:
@@ -361,14 +367,13 @@ class Client:
                 params["name"] = name
             if description:
                 params["description"] = description
-            if divisions:
-                params["division"] = ",".join(div.id for div in divisions)
 
             response = await self._async_request(
                 HTTPMethods.GET,
                 self.api_features.href("doors"),
                 params=params,
                 extra_fields=extra_fields,
+                division=division,
                 sort=sort,
                 top=top,
             )
@@ -386,6 +391,7 @@ class Client:
         id: str | None = None,
         name: str | None = None,
         extra_fields: list[str] | None = None,
+        division: list[str] | None = None,
         sort: SortMethod | None = None,
         top: int | None = None,
     ) -> list[FTPersonalDataFieldDefinition]:
@@ -403,6 +409,7 @@ class Client:
                 self.api_features.href("personalDataFields"),
                 params={"name": name} if name else None,
                 extra_fields=extra_fields,
+                division=division,
                 sort=sort,
                 top=top,
             )
@@ -428,6 +435,7 @@ class Client:
         name: str | None = None,
         pdfs: dict[str, str] | None = None,
         extra_fields: list[str] | None = None,
+        division: list[str] | None = None,
         sort: SortMethod | None = None,
         top: int | None = None,
     ) -> list[FTCardholder]:
@@ -460,6 +468,7 @@ class Client:
                 self.api_features.href("cardholders"),
                 params=params,
                 extra_fields=extra_fields,
+                division=division,
                 sort=sort,
                 top=top,
             )
