@@ -208,6 +208,106 @@ class FTAlarmZone:
 
 
 @dataclass
+class FTFenceZoneCommands:
+    """FTFenceZone commands base class."""
+
+    on: FTItemReference
+    off: FTItemReference
+    shunt: FTItemReference
+    unshunt: FTItemReference
+    highVoltage: FTItemReference
+    lowFeel: FTItemReference
+    cancel: FTItemReference
+
+
+@dataclass
+class FTFenceZone:
+    """FTFenceZone item base class."""
+
+    id: str
+    href: str
+    name: str
+    description: str | None
+    division: FTItem | None
+    voltage: int | None
+    shortName: str | None
+    notes: str | None
+    updates: FTItemReference | None
+    statusFlags: list[str] | None
+    connectedController: FTItem | None
+    commands: FTFenceZoneCommands | None
+
+    @classmethod
+    def from_dict(cls, kwargs: dict[str, Any]) -> FTFenceZone:
+        """Return FTAlarmZone object from dict."""
+        return from_dict(data_class=FTFenceZone, data=kwargs)
+
+
+@dataclass
+class FTInputCommands:
+    """FTInput commands base class."""
+
+    shunt: FTItemReference
+    unshunt: FTItemReference
+    isolate: FTItemReference | None
+    deisolate: FTItemReference | None
+
+
+@dataclass
+class FTInput:
+    """FTInput item base class."""
+
+    id: str
+    href: str
+    name: str
+    description: str | None
+    division: FTItem | None
+    shortName: str | None
+    notes: str | None
+    updates: FTItemReference | None
+    statusFlags: list[str] | None
+    connectedController: FTItem | None
+    commands: FTInputCommands | None
+
+    @classmethod
+    def from_dict(cls, kwargs: dict[str, Any]) -> FTInput:
+        """Return FTInput object from dict."""
+        return from_dict(data_class=FTInput, data=kwargs)
+
+
+@dataclass
+class FTOutputCommands:
+    """FTOutput commands base class."""
+
+    on: FTItemReference
+    off: FTItemReference
+    pulse: FTItemReference
+    cancel: FTItemReference
+
+
+@dataclass
+class FTOutput:
+    """FTOutput item base class."""
+
+    id: str
+    href: str
+    name: str
+    description: str | None
+    division: FTItem | None
+    shortName: str | None
+    notes: str | None
+    updates: FTItemReference | None
+    statusFlags: list[str] | None
+    connectedController: FTItem | None
+    commands: FTOutputCommands | None
+
+    @classmethod
+    def from_dict(cls, kwargs: dict[str, Any]) -> FTOutput:
+        """Return FTOutput object from dict."""
+        return from_dict(data_class=FTOutput, data=kwargs)
+
+
+@dataclass
 class FTAccessGroup:
     """FTAccessGroup item base class."""
 

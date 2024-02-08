@@ -17,6 +17,9 @@ from .exceptions import (
     UnauthorizedError,
 )
 from .models import (
+    FTFenceZone,
+    FTInput,
+    FTOutput,
     SortMethod,
     EventFilter,
     EventPost,
@@ -294,7 +297,145 @@ class Client:
         *,
         end_time: datetime | None = None,
     ) -> None:
-        """POST an override to an access zone."""
+        """POST an override to an alarm zone."""
+        data: dict[str, Any] = {}
+        if end_time:
+            data["endTime"] = f"{end_time.isoformat()}Z"
+        await self._async_request(
+            HTTPMethods.POST,
+            command.href,
+            data=data if data else None,
+        )
+
+    # Fence zone methods
+    async def get_fence_zone(
+        self,
+        *,
+        id: str | None = None,
+        name: str | None = None,
+        description: str | None = None,
+        extra_fields: list[str] | None = None,
+        division: list[str] | None = None,
+        sort: SortMethod | None = None,
+        top: int | None = None,
+    ) -> list[FTFenceZone]:
+        """Get Fence zones with filteration."""
+        fence_zones: list[FTFenceZone] = []
+        if id:
+            response: dict[str, Any] = await self._async_request(
+                HTTPMethods.GET,
+                f"{self.api_features.href('fenceZones')}/{id}",
+                extra_fields=extra_fields,
+            )
+            if response:
+                fence_zones = [FTFenceZone.from_dict(response)]
+        else:
+            response = await self._async_request(
+                HTTPMethods.GET,
+                self.api_features.href("fenceZones"),
+                extra_fields=extra_fields,
+                name=name,
+                description=description,
+                division=division,
+                sort=sort,
+                top=top,
+            )
+            fence_zones = [FTFenceZone.from_dict(item) for item in response["results"]]
+        return fence_zones
+
+    async def override_fence_zone(
+        self,
+        command: FTItemReference,
+    ) -> None:
+        """POST an override to a fence zone."""
+        await self._async_request(HTTPMethods.POST, command.href)
+
+    # Input methods
+    async def get_input(
+        self,
+        *,
+        id: str | None = None,
+        name: str | None = None,
+        description: str | None = None,
+        extra_fields: list[str] | None = None,
+        division: list[str] | None = None,
+        sort: SortMethod | None = None,
+        top: int | None = None,
+    ) -> list[FTInput]:
+        """Return list of Alarm zone items."""
+        inputs: list[FTInput] = []
+        if id:
+            response: dict[str, Any] = await self._async_request(
+                HTTPMethods.GET,
+                f"{self.api_features.href('inputs')}/{id}",
+                extra_fields=extra_fields,
+            )
+            if response:
+                inputs = [FTInput.from_dict(response)]
+        else:
+            response = await self._async_request(
+                HTTPMethods.GET,
+                self.api_features.href("inputs"),
+                extra_fields=extra_fields,
+                name=name,
+                description=description,
+                division=division,
+                sort=sort,
+                top=top,
+            )
+            inputs = [FTInput.from_dict(item) for item in response["results"]]
+        return inputs
+
+    async def override_input(
+        self,
+        command: FTItemReference,
+    ) -> None:
+        """POST an override to an input."""
+        await self._async_request(HTTPMethods.POST, command.href)
+
+    # Output methods
+    async def get_output(
+        self,
+        *,
+        id: str | None = None,
+        name: str | None = None,
+        description: str | None = None,
+        extra_fields: list[str] | None = None,
+        division: list[str] | None = None,
+        sort: SortMethod | None = None,
+        top: int | None = None,
+    ) -> list[FTOutput]:
+        """Return list of output items."""
+        outputs: list[FTOutput] = []
+        if id:
+            response: dict[str, Any] = await self._async_request(
+                HTTPMethods.GET,
+                f"{self.api_features.href('outputs')}/{id}",
+                extra_fields=extra_fields,
+            )
+            if response:
+                outputs = [FTOutput.from_dict(response)]
+        else:
+            response = await self._async_request(
+                HTTPMethods.GET,
+                self.api_features.href("outputs"),
+                extra_fields=extra_fields,
+                name=name,
+                description=description,
+                division=division,
+                sort=sort,
+                top=top,
+            )
+            outputs = [FTOutput.from_dict(item) for item in response["results"]]
+        return outputs
+
+    async def override_output(
+        self,
+        command: FTItemReference,
+        *,
+        end_time: datetime | None = None,
+    ) -> None:
+        """POST an override to an output."""
         data: dict[str, Any] = {}
         if end_time:
             data["endTime"] = f"{end_time.isoformat()}Z"
