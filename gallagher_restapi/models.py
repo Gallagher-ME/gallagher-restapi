@@ -1032,18 +1032,18 @@ class EventPost:
     """FTEvent summary class."""
 
     eventType: FTItem
-    source: FTDoor | FTItem | None = None
     priority: int | None = None
     time: datetime | None = None
     message: str | None = None
     details: str | None = None
-    cardholder: FTCardholder | None = None
-    operator: FTCardholder | None = None
-    entryAccessZone: FTItem | None = None
-    accessGroup: dict[str, Any] | None = None
-    lockerBank: FTItem | None = None
-    locker: FTItem | None = None
-    door: FTDoor | None = None
+    source: FTItemReference | None = None
+    cardholder: FTItemReference | None = None
+    operator: FTItemReference | None = None
+    entryAccessZone: FTItemReference | None = None
+    accessGroup: FTItemReference | None = None
+    lockerBank: FTItemReference | None = None
+    locker: FTItemReference | None = None
+    door: FTItemReference | None = None
 
     def as_dict(self) -> dict[str, Any]:
         """Return a dict from Event object."""
