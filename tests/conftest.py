@@ -1,4 +1,5 @@
 """Gallagher client fixture."""
+from typing import Any, AsyncGenerator
 import httpx
 import pytest_asyncio
 
@@ -8,7 +9,7 @@ from . import CONFIG
 
 
 @pytest_asyncio.fixture(name="gll_client")
-async def gll_client() -> Client:
+async def gll_client() -> AsyncGenerator[Any, Client]:
     """Return instance of Gallagher client."""
     async with httpx.AsyncClient(verify=False) as httpx_client:
         client = Client(
