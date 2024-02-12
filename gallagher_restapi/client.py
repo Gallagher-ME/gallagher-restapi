@@ -91,6 +91,8 @@ class Client:
         """Send a http request and return the response."""
         params = params or {}
         if extra_fields:
+            if "defaults" not in extra_fields:
+                extra_fields.append("defaults")
             params["fields"] = ",".join(extra_fields)
         if division:
             params["division"] = ",".join(division)
@@ -103,7 +105,7 @@ class Client:
         if top:
             params["top"] = top
 
-        _LOGGER.info(
+        _LOGGER.debug(
             "Sending %s request to endpoint: %s, data: %s, params: %s",
             method,
             endpoint,
@@ -143,7 +145,7 @@ class Client:
     async def initialize(self) -> None:
         """Connect to Server and initialize data."""
         response = await self._async_request(HTTPMethods.GET, f"{self.server_url}/api/")
-        self.api_features = FTApiFeatures(**response["features"])
+        self.api_features = FTApiFeatures.from_dict(response["features"])
         self.version = AwesomeVersion(response["version"])
         await self._update_item_types()
         await self._update_event_types()
@@ -164,7 +166,7 @@ class Client:
         self,
         *,
         id: str | None = None,
-        item_type: str | None = None,
+        item_types: list[str] | None = None,
         name: str | None = None,
         extra_fields: list[str] | None = None,
         division: list[str] | None = None,
@@ -182,13 +184,15 @@ class Client:
                 items = [FTItem(**response)]
 
         else:
-            # We will force selecting type for now
-            if item_type is None or not (type_id := self._item_types.get(item_type)):
-                raise ValueError(f"Unknown item type: {item_type}")
+            type_ids: list[str] = []
+            for item_type in item_types or []:
+                if (type_id := self._item_types.get(item_type)) is None:
+                    raise ValueError(f"Unknown item type: {item_type}")
+                type_ids.append(type_id)
             response = await self._async_request(
                 HTTPMethods.GET,
                 self.api_features.href("items"),
-                params={"type": type_id},
+                params={"type": ",".join(type_ids)},
                 extra_fields=extra_fields,
                 name=name,
                 division=division,
@@ -515,9 +519,9 @@ class Client:
             doors = [FTDoor.from_dict(door) for door in response["results"]]
         return doors
 
-    async def open_door(self, door: FTDoor) -> None:
-        """Open door."""
-        await self._async_request(HTTPMethods.POST, door.commands["open"].href)
+    async def override_door(self, command: FTItemReference) -> None:
+        """override door."""
+        await self._async_request(HTTPMethods.POST, command.href)
 
     # Personal fields methods
     async def get_personal_data_field(

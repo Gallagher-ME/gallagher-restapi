@@ -40,31 +40,31 @@ class SortMethod(StrEnum):
 class FTApiFeatures:
     """FTApiFeatures class."""
 
-    accessGroups: dict[str, Any]
-    accessZones: dict[str, Any]
-    alarms: dict[str, Any]
-    alarmZones: dict[str, Any]
-    cardholders: dict[str, Any]
-    cardTypes: dict[str, Any]
-    competencies: dict[str, Any]
-    dayCategories: dict[str, Any]
-    divisions: dict[str, Any]
-    doors: dict[str, Any]
-    elevators: dict[str, Any]
-    events: dict[str, Any]
-    fenceZones: dict[str, Any]
-    inputs: dict[str, Any]
-    interlockGroups: dict[str, Any]
-    items: dict[str, Any]
-    lockerBanks: dict[str, Any]
-    macros: dict[str, Any]
-    operatorGroups: dict[str, Any]
-    outputs: dict[str, Any]
-    personalDataFields: dict[str, Any]
-    receptions: dict[str, Any]
-    roles: dict[str, Any]
-    schedules: dict[str, Any]
-    visits: dict[str, Any]
+    accessGroups: dict[str, Any] | None
+    accessZones: dict[str, Any] | None
+    alarms: dict[str, Any] | None
+    alarmZones: dict[str, Any] | None
+    cardholders: dict[str, Any] | None
+    cardTypes: dict[str, Any] | None
+    competencies: dict[str, Any] | None
+    dayCategories: dict[str, Any] | None
+    divisions: dict[str, Any] | None
+    doors: dict[str, Any] | None
+    elevators: dict[str, Any] | None
+    events: dict[str, Any] | None
+    fenceZones: dict[str, Any] | None
+    inputs: dict[str, Any] | None
+    interlockGroups: dict[str, Any] | None
+    items: dict[str, Any] | None
+    lockerBanks: dict[str, Any] | None
+    macros: dict[str, Any] | None
+    operatorGroups: dict[str, Any] | None
+    outputs: dict[str, Any] | None
+    personalDataFields: dict[str, Any] | None
+    receptions: dict[str, Any] | None
+    roles: dict[str, Any] | None
+    schedules: dict[str, Any] | None
+    visits: dict[str, Any] | None
 
     def href(self, feature: str) -> str:
         """
@@ -86,12 +86,17 @@ class FTApiFeatures:
             raise ValueError(f"{sub_feature} is not found in {main_feature}")
         return attr[sub_feature or main_feature]["href"]
 
+    @classmethod
+    def from_dict(cls, kwargs: dict[str, Any]) -> FTApiFeatures:
+        """Return FTApiFeatures object from dict."""
+        return from_dict(data_class=FTApiFeatures, data=kwargs)
+
 
 @dataclass
 class FTItemReference:
     """FTItem reference class."""
 
-    href: str
+    href: str | None
 
 
 @dataclass
@@ -281,7 +286,7 @@ class FTOutputCommands:
 
     on: FTItemReference
     off: FTItemReference
-    pulse: FTItemReference
+    pulse: FTItemReference | None
     cancel: FTItemReference
 
 
@@ -1088,51 +1093,34 @@ class FTDoorField:
     to_dict: Callable[[Any], Any] = lambda val: val
 
 
-FTDOOR_FIELDS: tuple[FTDoorField, ...] = (
-    FTDoorField(name="href"),
-    FTDoorField(name="id"),
-    FTDoorField(name="name"),
-    FTDoorField(name="division", from_dict=lambda val: FTItem(**val)),
-    FTDoorField(name="entryAccessZone", from_dict=lambda val: FTLinkItem(**val)),
-    FTDoorField(name="notes"),
-    FTDoorField(name="shortName"),
-    FTDoorField(name="updates", from_dict=lambda val: FTItemReference(**val)),
-    FTDoorField(name="statusFlags"),
-    FTDoorField(
-        name="commands",
-        from_dict=lambda val: {
-            command: FTItemReference(**value) for command, value in val
-        },
-    ),
-    FTDoorField(name="connectedController", from_dict=lambda val: FTItem(**val)),
-)
+@dataclass
+class FTDoorCommands:
+    """FTDoor commands base class."""
+
+    open: FTItemReference
 
 
-@dataclass(init=False)
+@dataclass
 class FTDoor:
     """FTDoor details class."""
 
     href: str
     id: str
     name: str
-    description: str
-    division: FTItemReference
-    entryAccessZone: FTLinkItem
-    notes: str
-    shortName: str
-    updates: FTItemReference
-    statusFlags: list[str]
-    commands: dict[str, FTItemReference]
-    connectedController: FTItem
+    description: str | None
+    division: FTItemReference | None
+    entryAccessZone: FTLinkItem | None
+    notes: str | None
+    shortName: str | None
+    updates: FTItemReference | None
+    statusFlags: list[str] | None
+    commands: FTDoorCommands | None
+    connectedController: FTItem | None
 
     @classmethod
     def from_dict(cls, kwargs: dict[str, Any]) -> FTDoor:
         """Return FTDoor object from dict."""
-        _cls = FTDoor()
-        for door_field in FTDOOR_FIELDS:
-            if value := kwargs.get(door_field.name):
-                setattr(_cls, door_field.name, door_field.from_dict(value))
-        return _cls
+        return from_dict(data_class=FTDoor, data=kwargs)
 
 
 # Item status and overrides

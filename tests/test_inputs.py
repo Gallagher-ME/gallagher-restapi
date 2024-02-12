@@ -10,7 +10,7 @@ async def test_get_input(gll_client: Client) -> None:
     inputs = await gll_client.get_input()
     if inputs:
         input = await gll_client.get_input(
-            id=inputs[0].id, extra_fields=["defaults", "statusFlags"]
+            id=inputs[0].id, extra_fields=["statusFlags"]
         )
         assert input[0].statusFlags == ["open"]
 
@@ -24,12 +24,12 @@ async def test_override_input(gll_client: Client) -> None:
         assert input[0].commands
         await gll_client.override_fence_zone(input[0].commands.shunt)
         new_input = await gll_client.get_input(
-            id=input[0].id, extra_fields=["defaults", "statusFlags"]
+            id=input[0].id, extra_fields=["statusFlags"]
         )
         assert new_input[0].statusFlags == ["notPolled"]
 
         await gll_client.override_fence_zone(input[0].commands.unshunt)
         new_input = await gll_client.get_input(
-            id=input[0].id, extra_fields=["defaults", "statusFlags"]
+            id=input[0].id, extra_fields=["statusFlags"]
         )
         assert new_input[0].statusFlags == ["open"]

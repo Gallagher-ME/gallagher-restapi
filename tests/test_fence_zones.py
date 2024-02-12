@@ -10,7 +10,7 @@ async def test_get_fence_zone(gll_client: Client) -> None:
     fence_zones = await gll_client.get_fence_zone()
     if fence_zones:
         fence_zone = await gll_client.get_fence_zone(
-            id=fence_zones[0].id, extra_fields=["defaults", "voltage"]
+            id=fence_zones[0].id, extra_fields=["voltage"]
         )
         assert fence_zone[0].voltage
         assert fence_zone[0].voltage > 0
@@ -26,6 +26,6 @@ async def test_override_fence_zone(gll_client: Client) -> None:
         assert fence_zone[0].commands.off
         await gll_client.override_fence_zone(fence_zone[0].commands.off)
         new_fence_zone = await gll_client.get_fence_zone(
-            id=fence_zone[0].id, extra_fields=["defaults", "statusFlags", "voltage"]
+            id=fence_zone[0].id, extra_fields=["statusFlags", "voltage"]
         )
         assert new_fence_zone[0].statusFlags == ["overridden", "off", "highVoltage"]
