@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "gallagher-restapi"
-version = "0.1.0b17"
+version = "1.0.0"
 description = ""
 authors = ["Rami Mosleh <engrbm87@gmail.com>"]
 packages = [{include = "gallagher_restapi"}]
