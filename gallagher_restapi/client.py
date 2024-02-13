@@ -7,7 +7,6 @@ from ssl import SSLError
 from typing import Any, AsyncIterator
 
 import httpx
-from awesomeversion import AwesomeVersion
 
 from .exceptions import (
     ConnectError,
@@ -147,7 +146,7 @@ class Client:
         """Connect to Server and initialize data."""
         response = await self._async_request(HTTPMethods.GET, f"{self.server_url}/api/")
         self.api_features = FTApiFeatures.from_dict(response["features"])
-        self.version = AwesomeVersion(response["version"])
+        self.version = response["version"]
         await self._update_item_types()
         await self._update_event_types()
 
