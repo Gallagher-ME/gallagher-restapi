@@ -7,12 +7,12 @@ from gallagher_restapi.client import Client
 @pytest.mark.asyncio
 async def test_get_output(gll_client: Client) -> None:
     """Test getting an output item."""
-    outputs = await gll_client.get_output()
+    outputs = await gll_client.get_output(name="7000")
     if outputs:
         output = await gll_client.get_output(
             id=outputs[0].id, extra_fields=["statusFlags"]
         )
-        assert output[0].statusFlags == ["open"]
+        assert output[0].statusFlags == ["controllerOffline"]
 
 
 @pytest.mark.asyncio

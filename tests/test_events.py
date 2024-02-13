@@ -9,9 +9,9 @@ from gallagher_restapi.models import EventPost, FTItemReference, EventFilter
 async def test_get_event(gll_client: Client) -> None:
     """Test getting events from Gallagher."""
     event_filter = EventFilter(
-        top=1,
+        top=10,
         previous=True,
-        event_groups=[gll_client.event_groups["Card Event"]],
+        event_groups=[gll_client.event_groups["Access Denied"]],
     )
     last_event = await gll_client.get_events(event_filter=event_filter)
     assert last_event

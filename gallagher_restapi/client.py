@@ -17,6 +17,7 @@ from .exceptions import (
     UnauthorizedError,
 )
 from .models import (
+    FTCardType,
     FTFenceZone,
     FTInput,
     FTOutput,
@@ -140,7 +141,7 @@ class Client:
             return {}
         if "application/json" in response.headers.get("content-type"):
             return response.json()
-        return {"result": response.content}
+        return {"results": response.content}
 
     async def initialize(self) -> None:
         """Connect to Server and initialize data."""
@@ -202,7 +203,7 @@ class Client:
             items = [FTItem(**item) for item in response["results"]]
         return items
 
-    # Access zone methods
+    # region Access zone methods
     async def get_access_zone(
         self,
         *,
@@ -259,7 +260,9 @@ class Client:
             data=data if data else None,
         )
 
-    # Alarm zone methods
+    # endregion Access zone methods
+
+    # region Alarm zone methods
     async def get_alarm_zone(
         self,
         *,
@@ -311,7 +314,9 @@ class Client:
             data=data if data else None,
         )
 
-    # Fence zone methods
+    # endregion Alarm zone methods
+
+    # region Fence zone methods
     async def get_fence_zone(
         self,
         *,
@@ -354,7 +359,9 @@ class Client:
         """POST an override to a fence zone."""
         await self._async_request(HTTPMethods.POST, command.href)
 
-    # Input methods
+    # endregion Fence zone methods
+
+    # region Input methods
     async def get_input(
         self,
         *,
@@ -397,7 +404,9 @@ class Client:
         """POST an override to an input."""
         await self._async_request(HTTPMethods.POST, command.href)
 
-    # Output methods
+    # endregion Input methods
+
+    # region Output methods
     async def get_output(
         self,
         *,
@@ -449,43 +458,9 @@ class Client:
             data=data if data else None,
         )
 
-    # Access group methods
-    async def get_access_group(
-        self,
-        *,
-        id: str | None = None,
-        name: str | None = None,
-        description: str | None = None,
-        extra_fields: list[str] | None = None,
-        division: list[str] | None = None,
-        sort: SortMethod | None = None,
-        top: int | None = None,
-    ) -> list[FTAccessGroup]:
-        """Get Access groups filtered by name."""
-        access_groups: list[FTAccessGroup] = []
-        if id:
-            response: dict[str, Any] = await self._async_request(
-                HTTPMethods.GET, f"{self.api_features.href('accessGroups')}/{id}"
-            )
-            if response:
-                access_groups = [FTAccessGroup.from_dict(response)]
-        else:
-            response = await self._async_request(
-                HTTPMethods.GET,
-                self.api_features.href("accessGroups"),
-                extra_fields=extra_fields,
-                name=name,
-                description=description,
-                division=division,
-                sort=sort,
-                top=top,
-            )
-            access_groups = [
-                FTAccessGroup.from_dict(item) for item in response["results"]
-            ]
-        return access_groups
+    # endregion Output methods
 
-    # Door methods
+    # region Door methods
     async def get_door(
         self,
         *,
@@ -523,7 +498,79 @@ class Client:
         """override door."""
         await self._async_request(HTTPMethods.POST, command.href)
 
-    # Personal fields methods
+    # endregion Door methods
+
+    # region Cardholder methods
+    async def get_card_type(
+        self,
+        *,
+        id: str | None = None,
+        name: str | None = None,
+        description: str | None = None,
+        extra_fields: list[str] | None = None,
+        division: list[str] | None = None,
+        sort: SortMethod | None = None,
+        top: int | None = None,
+    ) -> list[FTCardType]:
+        """Return list of card type items."""
+        card_types: list[FTCardType] = []
+        if id:
+            response: dict[str, Any] = await self._async_request(
+                HTTPMethods.GET,
+                f"{self.api_features.href('cardTypes')}/{id}",
+                extra_fields=extra_fields,
+            )
+            if response:
+                card_types = [FTCardType.from_dict(response)]
+        else:
+            response = await self._async_request(
+                HTTPMethods.GET,
+                self.api_features.href("cardTypes/assign"),
+                extra_fields=extra_fields,
+                name=name,
+                description=description,
+                division=division,
+                sort=sort,
+                top=top,
+            )
+            card_types = [FTCardType.from_dict(item) for item in response["results"]]
+        return card_types
+
+    async def get_access_group(
+        self,
+        *,
+        id: str | None = None,
+        name: str | None = None,
+        description: str | None = None,
+        extra_fields: list[str] | None = None,
+        division: list[str] | None = None,
+        sort: SortMethod | None = None,
+        top: int | None = None,
+    ) -> list[FTAccessGroup]:
+        """Get Access groups filtered by name."""
+        access_groups: list[FTAccessGroup] = []
+        if id:
+            response: dict[str, Any] = await self._async_request(
+                HTTPMethods.GET, f"{self.api_features.href('accessGroups')}/{id}"
+            )
+            if response:
+                access_groups = [FTAccessGroup.from_dict(response)]
+        else:
+            response = await self._async_request(
+                HTTPMethods.GET,
+                self.api_features.href("accessGroups"),
+                extra_fields=extra_fields,
+                name=name,
+                description=description,
+                division=division,
+                sort=sort,
+                top=top,
+            )
+            access_groups = [
+                FTAccessGroup.from_dict(item) for item in response["results"]
+            ]
+        return access_groups
+
     async def get_personal_data_field(
         self,
         *,
@@ -546,7 +593,7 @@ class Client:
             response = await self._async_request(
                 HTTPMethods.GET,
                 self.api_features.href("personalDataFields"),
-                params={"name": name} if name else None,
+                name=name,
                 extra_fields=extra_fields,
                 division=division,
                 sort=sort,
@@ -559,14 +606,14 @@ class Client:
 
         return pdfs
 
-    async def get_image_from_pdf(self, cardholder_id: str, pdf_id: str) -> str | None:
+    async def get_image_from_pdf(self, pdf_reference: FTItemReference) -> str | None:
         """Returns base64 string of the image field."""
-        url = f"{self.api_features.href('cardholders')}/{cardholder_id}/personal_data/{pdf_id}"
-        if response := await self._async_request(HTTPMethods.GET, url):
-            return base64.b64encode(response["result"]).decode("utf-8")
+        if response := await self._async_request(HTTPMethods.GET, pdf_reference.href):
+            if not isinstance(response.get("results"), bytes):
+                raise ValueError(f"{pdf_reference.href} is not an image href")
+            return base64.b64encode(response["results"]).decode("utf-8")
         return None
 
-    # Cardholder methods
     async def get_cardholder(
         self,
         *,
@@ -588,9 +635,6 @@ class Client:
                 cardholders = [FTCardholder.from_dict(response)]
         else:
             params: dict[str, str] = {}
-            if name:
-                params = {"name": name}
-
             if pdfs:
                 for pdf_name, value in pdfs.items():
                     if not (pdf_name.startswith('"') and pdf_name.endswith('"')):
@@ -606,6 +650,7 @@ class Client:
                 HTTPMethods.GET,
                 self.api_features.href("cardholders"),
                 params=params,
+                name=name,
                 extra_fields=extra_fields,
                 division=division,
                 sort=sort,
@@ -640,7 +685,9 @@ class Client:
             cardholder.href,
         )
 
-    # Event methods
+    # endregion Cardholder methods
+
+    # region Event methods
     async def _update_event_types(self) -> None:
         """Fetch list of event groups and types from server."""
         response = await self._async_request(
@@ -653,7 +700,7 @@ class Client:
 
         for event_group in self.event_groups.values():
             self.event_types.update(
-                {event_type.name: event_type for event_type in event_group.event_types}
+                {event_type.name: event_type for event_type in event_group.eventTypes}
             )
 
     async def get_events(
@@ -725,7 +772,9 @@ class Client:
             return FTItemReference(response["location"])
         return None
 
-    # Status and override methods
+    # endregion Event methods
+
+    # region Status and override methods
 
     async def get_item_status(
         self,
@@ -747,3 +796,5 @@ class Client:
             [FTItemStatus(**item) for item in response["updates"]],
             FTItemReference(**response["next"]),
         )
+
+    # endregion Status and override methods

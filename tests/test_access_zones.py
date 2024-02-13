@@ -12,7 +12,7 @@ async def test_get_access_zone(gll_client: Client) -> None:
         access_zone = await gll_client.get_access_zone(id=access_zones[0].id)
         assert access_zone[0].name is not None
 
-    if divisions := await gll_client.get_item(item_type="Division", name="Test"):
+    if divisions := await gll_client.get_item(item_types=["Division"], name="Test"):
         access_zone = await gll_client.get_access_zone(division=[divisions[0].id])
         assert len(access_zone) == 1
 

@@ -3,7 +3,7 @@ from unittest.mock import patch
 import pytest
 
 from gallagher_restapi.client import Client
-from gallagher_restapi.models import FTCardholder, FTItemReference, SortMethod
+from gallagher_restapi.models import FTCardholder, FTItemReference
 
 
 @pytest.mark.asyncio
@@ -42,3 +42,38 @@ async def test_add_cardholder(gll_client: Client) -> None:
         new_cardholder_href = await gll_client.add_cardholder(cardholder)
 
     assert new_cardholder_href.href == "https://location"
+
+
+@pytest.mark.asyncio
+async def test_get_card_type(gll_client: Client) -> None:
+    """Test getting card types."""
+    card_types = await gll_client.get_card_type()
+    assert len(card_types) >= 1
+    card_type = await gll_client.get_card_type(
+        id=card_types[0].id, extra_fields=["credentialClass"]
+    )
+    assert len(card_type) == 1
+
+
+@pytest.mark.asyncio
+async def test_get_personal_data_field(gll_client: Client) -> None:
+    """Test getting personal data field."""
+    pdf_definitions = await gll_client.get_personal_data_field()
+    assert len(pdf_definitions) >= 1
+    pdf_defenition = await gll_client.get_personal_data_field(id=pdf_definitions[0].id)
+    assert len(pdf_defenition) == 1
+
+
+@pytest.mark.asyncio
+async def test_get_image_from_pdf(gll_client: Client) -> None:
+    """Test getting image from personal data field."""
+    cardholders = await gll_client.get_cardholder(id="1012")
+    cardholder = cardholders[0]
+    assert cardholder.personalDataDefinitions
+    for pdf in cardholder.personalDataDefinitions:
+        for pdf_info in pdf.values():
+            assert pdf_info.definition
+            if pdf_info.definition.type == "image":
+                assert isinstance(pdf_info.value, FTItemReference)
+                image = await gll_client.get_image_from_pdf(pdf_info.value)
+                assert image is not None
