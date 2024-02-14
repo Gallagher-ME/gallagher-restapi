@@ -19,6 +19,7 @@ from .models import (
     FTCardType,
     FTFenceZone,
     FTInput,
+    FTNewCardholder,
     FTOutput,
     SortMethod,
     EventFilter,
@@ -660,7 +661,7 @@ class Client:
             ]
         return cardholders
 
-    async def add_cardholder(self, cardholder: FTCardholder) -> FTItemReference:
+    async def add_cardholder(self, cardholder: FTNewCardholder) -> FTItemReference:
         """Add a new cardholder in Gallagher."""
         response = await self._async_request(
             HTTPMethods.POST,
@@ -669,20 +670,19 @@ class Client:
         )
         return FTItemReference(response["location"])
 
-    async def update_cardholder(self, cardholder: FTCardholder) -> None:
+    async def update_cardholder(
+        self, cardholder_href: str, cardholder_updates: FTNewCardholder
+    ) -> None:
         """Update existing cardholder in Gallagher."""
         await self._async_request(
             HTTPMethods.PATCH,
-            cardholder.href,
-            data=cardholder.as_dict(),
+            cardholder_href,
+            data=cardholder_updates.as_dict(),
         )
 
-    async def remove_cardholder(self, cardholder: FTCardholder) -> None:
+    async def remove_cardholder(self, cardholder_href: str) -> None:
         """Remove existing cardholder in Gallagher."""
-        await self._async_request(
-            HTTPMethods.DELETE,
-            cardholder.href,
-        )
+        await self._async_request(HTTPMethods.DELETE, cardholder_href)
 
     # endregion Cardholder methods
 

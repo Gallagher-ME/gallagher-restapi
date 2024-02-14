@@ -1,9 +1,11 @@
 """Test cardholder methods."""
+from datetime import datetime
 from unittest.mock import patch
+from _pytest.fixtures import add_funcarg_pseudo_fixture_def
 import pytest
 
 from gallagher_restapi.client import Client
-from gallagher_restapi.models import FTCardholder, FTItemReference
+from gallagher_restapi.models import FTCardholderCard, FTItemReference, FTNewCardholder
 
 
 @pytest.mark.asyncio
@@ -34,7 +36,7 @@ async def test_add_cardholder(gll_client: Client) -> None:
         "gallagher_restapi.Client._async_request",
         return_value={"location": "https://location"},
     ):
-        cardholder = FTCardholder(
+        cardholder = FTNewCardholder(
             division=FTItemReference(href="https://division-href"),
             firstName="John",
             lastName="Doe",
@@ -42,6 +44,25 @@ async def test_add_cardholder(gll_client: Client) -> None:
         new_cardholder_href = await gll_client.add_cardholder(cardholder)
 
     assert new_cardholder_href.href == "https://location"
+
+
+@pytest.mark.asyncio
+async def test_update_cardholder(gll_client: Client) -> None:
+    """Test updating a cardholder."""
+    card_types = await gll_client.get_card_type(name="Test")
+    test_cardholder = await gll_client.get_cardholder(id="1012")
+    assert test_cardholder[0].division
+    updated_cardholder = FTNewCardholder(division=test_cardholder[0].division)
+    updated_cardholder.patch(
+        add=[
+            FTCardholderCard.create_card(
+                card_type_href=card_types[0].href,
+                number="4",
+                active_from=datetime(2024, 2, 10),
+            )
+        ]
+    )
+    await gll_client.update_cardholder(test_cardholder[0].href, updated_cardholder)
 
 
 @pytest.mark.asyncio
