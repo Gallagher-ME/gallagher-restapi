@@ -460,11 +460,16 @@ class FTAccessGroupMembership:
         return from_dict(FTAccessGroupMembership, kwargs)
 
     @classmethod
-    def from_dict(cls, kwargs: dict[str, Any]) -> FTAccessGroupMembership:
+    def from_dict(cls, kwargs: list[dict[str, Any]]) -> list[FTAccessGroupMembership]:
         """Return FTAccessGroupMembership object from dict."""
-        return from_dict(
-            FTAccessGroupMembership, kwargs, config=Config(type_hooks=CONVERTERS)
-        )
+        return [
+            from_dict(
+                FTAccessGroupMembership,
+                access_group,
+                config=Config(type_hooks=CONVERTERS),
+            )
+            for access_group in kwargs
+        ]
 
 
 # endregion Access groups models
@@ -510,21 +515,23 @@ class FTCardholderCard:
     cardSerialNumber: str | None
     issueLevel: int | None
     status: FTStatus | None
-    active_from: datetime | None
-    active_until: datetime | None
+    from_: datetime | None
+    until: datetime | None
 
     @property
     def to_dict(self) -> dict[str, Any]:
         """Return json string for post and update."""
-        _dict: dict[str, Any] = {"href": self.href, "type": {"href": self.type.href}}
+        _dict: dict[str, Any] = {"type": {"href": self.type.href}}
+        if self.href:
+            _dict["href"] = self.href
         if self.number:
             _dict["number"] = self.number
         if self.issueLevel:
             _dict["issueLevel"] = self.issueLevel
-        if self.active_from:
-            _dict["from"] = f"{self.active_from.isoformat()}Z"
-        if self.active_until:
-            _dict["until"] = f"{self.active_until.isoformat()}Z"
+        if self.from_:
+            _dict["from"] = f"{self.from_.isoformat()}Z"
+        if self.until:
+            _dict["until"] = f"{self.until.isoformat()}Z"
         if self.status:
             _dict["status"] = self.status
         return _dict
@@ -532,28 +539,32 @@ class FTCardholderCard:
     @classmethod
     def create_card(
         cls,
-        card_type: FTItem,
+        card_type_href: str,
         number: str = "",
         issueLevel: int | None = None,
         active_from: datetime | None = None,
         active_until: datetime | None = None,
     ) -> FTCardholderCard:
         """Create an FTCardholder card object."""
-        kwargs: dict[str, Any] = {"type": {"href": card_type.href}}
+        kwargs: dict[str, Any] = {"type": {"href": card_type_href}}
         if number:
             kwargs["number"] = number
         if issueLevel:
             kwargs["issueLevel"] = issueLevel
         if active_from:
-            kwargs["active_from"] = active_from
+            kwargs["from_"] = active_from
         if active_until:
-            kwargs["active_until"] = active_until
+            kwargs["until"] = active_until
         return from_dict(FTCardholderCard, kwargs)
 
     @classmethod
-    def from_dict(cls, kwargs: dict[str, Any]) -> FTCardholderCard:
+    def from_dict(cls, kwargs: list[dict[str, Any]]) -> list[FTCardholderCard]:
         """Return FTCardholderCard object from dict."""
-        return from_dict(FTCardholderCard, kwargs, config=Config(type_hooks=CONVERTERS))
+        print(kwargs)
+        return [
+            from_dict(FTCardholderCard, card, config=Config(type_hooks=CONVERTERS))
+            for card in kwargs
+        ]
 
 
 # endregion Cardholder card models
@@ -647,212 +658,145 @@ class FTCardholderPdfValue:
 
 
 @dataclass
-class FTCardholderField:
-    """Class to represent FTCardholder field."""
-
-    name: str
-    from_dict: Callable[[Any], Any] = lambda val: val
-    to_dict: Callable[[Any], Any] = lambda val: val
-
-
-FTCARDHOLDER_FIELDS: tuple[FTCardholderField, ...] = (
-    FTCardholderField(name="href"),
-    FTCardholderField(name="id"),
-    FTCardholderField(name="name"),
-    FTCardholderField(name="firstName"),
-    FTCardholderField(name="lastName"),
-    FTCardholderField(name="shortName"),
-    FTCardholderField(name="description"),
-    FTCardholderField(name="authorised"),
-    FTCardholderField(
-        name="lastSuccessfulAccessTime",
-        from_dict=lambda val: datetime.fromisoformat(val[:-1]).replace(tzinfo=pytz.utc),
-        to_dict=lambda val: f"{val.isoformat()}Z",
-    ),
-    FTCardholderField(
-        name="lastSuccessfulAccessZone",
-        from_dict=lambda val: FTLinkItem(**val),
-    ),
-    FTCardholderField(name="serverDisplayName"),
-    FTCardholderField(name="division", from_dict=lambda val: FTItem(**val)),
-    FTCardholderField(name="disableCipherPad"),
-    FTCardholderField(name="usercode"),
-    FTCardholderField(name="operatorLoginEnabled"),
-    FTCardholderField(name="operatorUsername"),
-    FTCardholderField(name="operatorPassword"),
-    FTCardholderField(name="operatorPasswordExpired"),
-    FTCardholderField(name="windowsLoginEnabled"),
-    FTCardholderField(name="windowsUsername"),
-    FTCardholderField(
-        name="personalDataDefinitions",
-        from_dict=lambda val: FTCardholderPdfValue.from_dict(val),
-        to_dict=lambda val: [pdf_value.to_dict for pdf_value in val],
-    ),
-    FTCardholderField(
-        name="cards",
-        from_dict=lambda val: [FTCardholderCard.from_dict(card) for card in val],
-        to_dict=lambda val: [card.to_dict for card in val],
-    ),
-    FTCardholderField(
-        name="accessGroups",
-        from_dict=lambda val: [
-            FTAccessGroupMembership.from_dict(access_group) for access_group in val
-        ],
-        to_dict=lambda val: [access_group.to_dict for access_group in val],
-    ),
-    # FTCardholderField(
-    #     key="operator_groups",
-    #     name="operatorGroups",
-    #     value=lambda val: [
-    #         FTOperatorGroup(operator_group) for operator_group in val
-    #     ],
-    # ),
-    # FTCardholderField(
-    #     key="competencies",
-    #     name="competencies",
-    #     value=lambda val: [
-    #         FTCompetency(competency) for competency in val
-    #     ],
-    # ),
-    # FTCardholderField(name="edit", from_dict=lambda val: FTItemReference(**val)),
-    FTCardholderField(
-        name="updateLocation",
-        from_dict=lambda val: FTItemReference(**val),
-    ),
-    FTCardholderField(name="notes"),
-    # FTCardholderField(key="notifications", name="notifications", value=lambda val: FTNotification(val)),
-    FTCardholderField(name="relationships"),
-    FTCardholderField(name="lockers"),
-    FTCardholderField(name="elevatorGroups"),
-    FTCardholderField(
-        name="lastPrintedOrEncodedTime",
-        from_dict=lambda val: datetime.fromisoformat(val[:-1]).replace(tzinfo=pytz.utc),
-    ),
-    FTCardholderField(name="lastPrintedOrEncodedIssueLevel"),
-    FTCardholderField(name="redactions"),
-)
-
-
-@dataclass
 class FTCardholder:
     """FTCardholder details class."""
 
-    href: str = field(init=False)
-    id: str = field(init=False)
-    division: FTItemReference | None = None
-    name: str = field(init=False)
-    firstName: str = ""
-    lastName: str = ""
-    shortName: str = ""
-    description: str = ""
-    authorised: bool = field(default=False)
-    pdfs: dict[str, Any] = field(default_factory=dict)
-    lastSuccessfulAccessTime: datetime = field(init=False)
-    lastSuccessfulAccessZone: FTLinkItem = field(init=False)
-    serverDisplayName: str = field(init=False)
-    disableCipherPad: bool = field(default=False)
-    usercode: str = ""
-    operatorLoginEnabled: bool = field(default=False)
-    operatorUsername: str = ""
-    operatorPassword: str = ""
-    operatorPasswordExpired: bool = field(default=False)
-    windowsLoginEnabled: bool = field(default=False)
-    windowsUsername: str = ""
-    personalDataDefinitions: list[dict[str, FTCardholderPdfValue]] | None = field(
-        default=None
-    )
-    cards: list[FTCardholderCard] | dict[str, list[FTCardholderCard]] | None = None
+    href: str
+    id: str
+    division: FTItemReference | None
+    name: str | None
+    firstName: str | None
+    lastName: str | None
+    shortName: str | None
+    description: str | None
+    lastSuccessfulAccessTime: datetime | None
+    lastSuccessfulAccessZone: FTLinkItem | None
+    serverDisplayName: str | None
+    disableCipherPad: bool | None
+    usercode: str | None
+    operatorUsername: str | None
+    operatorPassword: str | None
+    windowsUsername: str | None
+    personalDataDefinitions: list[dict[str, FTCardholderPdfValue]] | None
+    cards: list[FTCardholderCard] | dict[str, list[FTCardholderCard]] | None
     accessGroups: list[FTAccessGroupMembership] | dict[
         str, list[FTAccessGroupMembership]
-    ] | None = None
+    ] | None
     # operator_groups: str
     # competencies: str
     # edit: str
-    updateLocation: FTItemReference | None = None
-    notes: str = ""
-    # relationships: Any | None = None
-    lockers: Any | None = None
-    elevatorGroups: Any | None = None
-    lastPrintedOrEncodedTime: datetime | None = None
-    lastPrintedOrEncodedIssueLevel: int | None = None
-    # redactions: Any | None = None
+    updateLocation: FTItemReference | None
+    notes: str | None
+    # relationships: Any | None
+    lockers: Any | None
+    elevatorGroups: Any | None
+    lastPrintedOrEncodedTime: datetime | None
+    lastPrintedOrEncodedIssueLevel: int | None
+    # redactions: Any | None
+    pdfs: dict[str, str | FTItemReference] = field(default_factory=dict)
+    authorised: bool = False
+    operatorLoginEnabled: bool = False
+    operatorPasswordExpired: bool = False
+    windowsLoginEnabled: bool = False
 
     def as_dict(self) -> dict[str, Any]:
         """Return serialized str."""
-        _dict: dict[str, Any] = {}
-        for cardholder_field in FTCARDHOLDER_FIELDS:
-            if value := getattr(self, cardholder_field.name, None):
-                if cardholder_field.name in [
-                    "cards",
-                    "accessGroups",
-                ] and isinstance(value, dict):
-                    _dict[cardholder_field.name] = {
-                        key: cardholder_field.to_dict(val) for key, val in value.items()
-                    }
-                else:
-                    _dict[cardholder_field.name] = cardholder_field.to_dict(value)
-
+        _dict: dict[str, Any] = {
+            key: value
+            for key, value in self.__dict__.items()
+            if key != "pdfs" and value is not None
+        }
         if self.pdfs:
             _dict.update({f"@{name}": value for name, value in self.pdfs.items()})
-        return json.loads(json.dumps(_dict, default=lambda o: o.__dict__))
+        return json.loads(json.dumps(_dict, default=json_serializer))
 
     @classmethod
     def from_dict(cls, kwargs: dict[str, Any]) -> FTCardholder:
         """Return FTCardholder object from dict."""
-        _cls = FTCardholder()
-        for cardholder_field in FTCARDHOLDER_FIELDS:
-            if value := kwargs.get(cardholder_field.name):
-                setattr(_cls, cardholder_field.name, cardholder_field.from_dict(value))
-
-        for cardholder_pdf in list(kwargs.keys()):
+        cardholder = from_dict(
+            FTCardholder, kwargs, config=Config(type_hooks=CONVERTERS)
+        )
+        for cardholder_pdf, value in list(kwargs.items()):
             if cardholder_pdf.startswith("@"):
-                _cls.pdfs[cardholder_pdf[1:]] = kwargs[cardholder_pdf]
+                value = FTItemReference(**value) if isinstance(value, dict) else value
+                cardholder.pdfs[cardholder_pdf[1:]] = value
 
-        return _cls
+        return cardholder
 
-    @classmethod
+
+@dataclass
+class FTNewCardholder:
+    """FTNewCardholder object class."""
+
+    division: FTItemReference
+    firstName: str | None = None
+    lastName: str | None = None
+    shortName: str | None = None
+    description: str | None = None
+    usercode: str | None = None
+    operatorUsername: str | None = None
+    operatorPassword: str | None = None
+    windowsUsername: str | None = None
+    personalDataDefinitions: list[dict[str, FTCardholderPdfValue]] | None = None
+    cards: list[FTCardholderCard] | dict[str, list[FTCardholderCard]] | None = None
+    accessGroups: list[FTAccessGroupMembership] | dict[
+        str, list[FTAccessGroupMembership]
+    ] | None = None
+    notes: str | None = None
+    lockers: Any | None = None
+    elevatorGroups: Any | None = None
+    pdfs: dict[str, Any] = field(default_factory=dict)
+    authorised: bool = False
+    operatorLoginEnabled: bool | None = None
+    operatorPasswordExpired: bool | None = None
+    windowsLoginEnabled: bool | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        """Return serialized str."""
+        _dict: dict[str, Any] = {
+            key: value
+            for key, value in self.__dict__.items()
+            if key != "pdfs" and value is not None
+        }
+        if self.pdfs:
+            _dict.update({f"@{name}": value for name, value in self.pdfs.items()})
+        return json.loads(json.dumps(_dict, default=json_serializer))
+
     def patch(
-        cls,
-        cardholder: FTCardholder,
+        self,
         add: list[FTCardholderCard | FTAccessGroupMembership] | None = None,
         update: list[FTCardholderCard | FTAccessGroupMembership] | None = None,
         remove: list[FTCardholderCard | FTAccessGroupMembership] | None = None,
         **kwargs: Any,
-    ) -> FTCardholder:
+    ) -> None:
         """Return FTCardholder object from dict."""
-        # TODO handle all fields that require a patch action like cards, access groups...
-        _cls = FTCardholder()
-        _cls.href = cardholder.href
-        _cls.cards = {}
-        _cls.accessGroups = {}
-
+        self.cards = {}
+        self.accessGroups = {}
         if add:
             for item in add:
                 if isinstance(item, FTCardholderCard):
-                    _cls.cards.setdefault("add", []).append(item)
+                    self.cards.setdefault("add", []).append(item)
                 elif isinstance(item, FTAccessGroupMembership):
-                    _cls.accessGroups.setdefault("add", []).append(item)
+                    self.accessGroups.setdefault("add", []).append(item)
         if update:
             for item in update:
                 if isinstance(item, FTCardholderCard):
-                    _cls.cards.setdefault("update", []).append(item)
+                    self.cards.setdefault("update", []).append(item)
                 elif isinstance(item, FTAccessGroupMembership):
-                    _cls.accessGroups.setdefault("update", []).append(item)
+                    self.accessGroups.setdefault("update", []).append(item)
         if remove:
             for item in remove:
                 if isinstance(item, FTCardholderCard):
-                    _cls.cards.setdefault("remove", []).append(item)
+                    self.cards.setdefault("remove", []).append(item)
 
                 elif isinstance(item, FTAccessGroupMembership):
-                    _cls.accessGroups.setdefault("remove", []).append(item)
+                    self.accessGroups.setdefault("remove", []).append(item)
 
         for key, value in kwargs.items():
             try:
-                setattr(_cls, key, value)
-            except AttributeError as err:
-                print(err)
+                setattr(self, key, value)
+            except AttributeError:
                 continue
-        return _cls
 
 
 # endregion Cardholder models
@@ -1164,7 +1108,7 @@ class FTItemStatus:
 
 # endregion Item status and overrides
 
-CONVERTERS = {
+CONVERTERS: dict[Any, Callable[[Any], Any]] = {
     datetime: lambda x: datetime.fromisoformat(x[:-1]).replace(tzinfo=pytz.utc),  # type: ignore[index]
     FTAccessZoneCommands: lambda x: verify_commands(FTAccessZoneCommands, x),
     FTAlarmZoneCommands: lambda x: verify_commands(FTAlarmZoneCommands, x),
@@ -1172,6 +1116,9 @@ CONVERTERS = {
     FTInputCommands: lambda x: verify_commands(FTInputCommands, x),
     FTOutputCommands: lambda x: verify_commands(FTOutputCommands, x),
     FTCardholder: FTCardholder.from_dict,
+    list[dict[str, FTCardholderPdfValue]]: FTCardholderPdfValue.from_dict,
+    list[FTCardholderCard]: FTCardholderCard.from_dict,
+    list[FTAccessGroupMembership]: FTAccessGroupMembership.from_dict,
 }
 
 
@@ -1181,3 +1128,10 @@ def verify_commands(cls: Type[T], kwargs: dict[str, Any]) -> T | None:
         if "disabled" in commands:
             return None
     return from_dict(data_class=cls, data=kwargs)
+
+
+def json_serializer(value: Any) -> Any:
+    """serialize dataclass objects."""
+    if to_dict := getattr(value, "to_dict", None):
+        return to_dict
+    return value.__dict__
