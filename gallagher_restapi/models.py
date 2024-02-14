@@ -849,61 +849,6 @@ class EventField:
     value: Callable[[Any], Any] = lambda val: val
 
 
-# EVENT_FIELDS: tuple[EventField, ...] = (
-#     EventField(key="defaults", name="defaults"),
-#     EventField(key="details", name="details"),
-#     EventField(key="href", name="href"),
-#     EventField(key="id", name="id"),
-#     EventField(key="server_display_name", name="serverDisplayName"),
-#     EventField(key="message", name="message"),
-#     EventField(
-#         key="time",
-#         name="time",
-#         value=lambda val: datetime.fromisoformat(val[:-1]).replace(tzinfo=pytz.utc),
-#     ),
-#     EventField(key="occurrences", name="occurrences"),
-#     EventField(key="priority", name="priority"),
-#     EventField(key="alarm", name="alarm", value=lambda val: FTAlarm(**val)),
-#     EventField(key="operator", name="operator", value=lambda val: FTLinkItem(**val)),
-#     EventField(key="source", name="source", value=lambda val: FTItem(**val)),
-#     EventField(key="event_group", name="group", value=lambda val: FTItemType(**val)),
-#     EventField(key="event_type", name="type", value=lambda val: FTItemType(**val)),
-#     EventField(
-#         key="event_type2", name="eventType", value=lambda val: FTItemType(**val)
-#     ),
-#     EventField(key="division", name="division", value=lambda val: FTItem(**val)),
-#     EventField(
-#         key="cardholder",
-#         name="cardholder",
-#         value=FTCardholder.from_dict,
-#     ),
-#     EventField(
-#         key="entry_access_zone", name="entryAccessZone", value=lambda val: FTItem(**val)
-#     ),
-#     EventField(
-#         key="exit_access_zone", name="exitAccessZone", value=lambda val: FTItem(**val)
-#     ),
-#     EventField(key="door", name="door", value=lambda val: FTLinkItem(**val)),
-#     EventField(key="access_group", name="accessGroup", value=lambda val: FTItem(**val)),
-#     EventField(key="card", name="card", value=FTEventCard.from_dict),
-#     # EventField(
-#     #     key="modified_item",
-#     #     name="modifiedItem",
-#     #     value=lambda val: FTEventCard(val),
-#     # ),
-#     EventField(
-#         key="last_occurrence_time",
-#         name="lastOccurrenceTime",
-#         value=lambda val: datetime.fromisoformat(val[:-1]).replace(tzinfo=pytz.utc),
-#     ),
-#     EventField(
-#         key="previous", name="previous", value=lambda val: FTItemReference(**val)
-#     ),
-#     EventField(key="next", name="next", value=lambda val: FTItemReference(**val)),
-#     EventField(key="updates", name="updates", value=lambda val: FTItemReference(**val)),
-# )
-
-
 @dataclass
 class FTEvent:
     """FTEvent summary class."""
@@ -948,12 +893,12 @@ class EventFilter:
     top: int | None = None
     after: datetime | None = None
     before: datetime | None = None
-    sources: list[FTItem] | list[str] | None = None
-    event_types: list[FTItem] | list[str] | None = None
-    event_groups: list[FTEventGroup] | list[str] | None = None
-    cardholders: list[FTCardholder] | list[str] | None = None
-    divisions: list[FTItem] | list[str] | None = None
-    related_items: list[FTItem] | list[str] | None = None
+    sources: list[str] | None = None
+    event_types: list[str] | None = None
+    event_groups: list[str] | None = None
+    cardholders: list[str] | None = None
+    divisions: list[str] | None = None
+    related_items: list[str] | None = None
     fields: list[str] | None = None
     previous: bool = False
 
@@ -967,41 +912,17 @@ class EventFilter:
         if self.before and (before_value := self.before.isoformat()):
             params["after"] = before_value
         if self.sources:
-            source_ids = [
-                source.id if isinstance(source, FTItem) else source
-                for source in self.sources
-            ]
-            params["source"] = ",".join(source_ids)
+            params["source"] = ",".join(self.sources)
         if self.event_types:
-            event_type_ids = [
-                event_type.id if isinstance(event_type, FTItem) else event_type
-                for event_type in self.event_types
-            ]
-            params["type"] = ",".join(event_type_ids)
+            params["type"] = ",".join(self.event_types)
         if self.event_groups:
-            event_group_ids = [
-                event_group.id if isinstance(event_group, FTEventGroup) else event_group
-                for event_group in self.event_groups
-            ]
-            params["group"] = ",".join(event_group_ids)
+            params["group"] = ",".join(self.event_groups)
         if self.cardholders:
-            cardholder_ids = [
-                cardholder.id if isinstance(cardholder, FTCardholder) else cardholder
-                for cardholder in self.cardholders
-            ]
-            params["cardholder"] = ",".join(cardholder_ids)
+            params["cardholder"] = ",".join(self.cardholders)
         if self.divisions:
-            division_ids = [
-                division.id if isinstance(division, FTItem) else division
-                for division in self.divisions
-            ]
-            params["division"] = ",".join(division_ids)
+            params["division"] = ",".join(self.divisions)
         if self.related_items:
-            related_item_ids = [
-                related_item.id if isinstance(related_item, FTItem) else related_item
-                for related_item in self.related_items
-            ]
-            params["relatedItem"] = ",".join(related_item_ids)
+            params["relatedItem"] = ",".join(self.related_items)
         if self.fields:
             params["fields"] = ",".join(self.fields)
         return params
