@@ -746,7 +746,7 @@ class FTNewCardholder:
     lockers: Any | None = None
     elevatorGroups: Any | None = None
     pdfs: dict[str, Any] = field(default_factory=dict)
-    authorised: bool = False
+    authorised: bool | None = None
     operatorLoginEnabled: bool | None = None
     operatorPasswordExpired: bool | None = None
     windowsLoginEnabled: bool | None = None
