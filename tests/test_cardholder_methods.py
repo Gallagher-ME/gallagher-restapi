@@ -1,7 +1,6 @@
 """Test cardholder methods."""
 from datetime import datetime
 from unittest.mock import patch
-from _pytest.fixtures import add_funcarg_pseudo_fixture_def
 import pytest
 
 from gallagher_restapi.client import Client
