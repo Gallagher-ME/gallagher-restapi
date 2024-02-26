@@ -51,7 +51,7 @@ async def test_update_cardholder(gll_client: Client) -> None:
     card_types = await gll_client.get_card_type(name="Test")
     test_cardholder = await gll_client.get_cardholder(id="1012")
     assert test_cardholder[0].division
-    updated_cardholder = FTNewCardholder(division=test_cardholder[0].division)
+    updated_cardholder = FTNewCardholder()
     updated_cardholder.patch(
         add=[
             FTCardholderCard.create_card(
