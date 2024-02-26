@@ -11,6 +11,8 @@ from typing import Any, Type, TypeVar
 import pytz
 from dacite import Config, from_dict
 
+from gallagher_restapi.exceptions import LicenseError
+
 T = TypeVar("T")
 
 
@@ -81,12 +83,13 @@ class FTApiFeatures:
                 main_feature = feature
         except ValueError:
             raise ValueError("Incorrect syntax of feature.")
-
-        if not (attr := getattr(self, main_feature)):
+        if not hasattr(self, main_feature):
             raise ValueError(f"{main_feature} is not a valid feature")
-        if sub_feature and sub_feature not in attr:
+        if not (feature := getattr(self, main_feature)):
+            raise LicenseError(f"{main_feature} is not licensed for this site.")
+        if sub_feature and sub_feature not in feature:
             raise ValueError(f"{sub_feature} is not found in {main_feature}")
-        return attr[sub_feature or main_feature]["href"]
+        return feature[sub_feature or main_feature]["href"]
 
     @classmethod
     def from_dict(cls, kwargs: dict[str, Any]) -> FTApiFeatures:

@@ -4,14 +4,13 @@ import base64
 import logging
 from datetime import datetime
 from ssl import SSLError
-from typing import Any, AsyncIterator
+from typing import Any, AsyncIterator, cast
 
 import httpx
 
 from .exceptions import (
     ConnectError,
     GllApiError,
-    LicenseError,
     RequestError,
     UnauthorizedError,
 )
@@ -45,8 +44,6 @@ _LOGGER = logging.getLogger(__name__)
 class Client:
     """Gallagher REST api base client."""
 
-    api_features: FTApiFeatures
-
     def __init__(
         self,
         api_key: str,
@@ -70,6 +67,7 @@ class Client:
         if token:
             self.httpx_client.headers["IntegrationLicense"] = token
         self.httpx_client.timeout.read = 60
+        self.api_features: FTApiFeatures = None  # type: ignore[assignment]
         self._item_types: dict[str, str] = {}
         self.event_groups: dict[str, FTEventGroup] = {}
         self.event_types: dict[str, FTItem] = {}
@@ -127,14 +125,18 @@ class Client:
         if response.status_code == httpx.codes.UNAUTHORIZED:
             raise UnauthorizedError("Unauthorized request. Ensure api key is correct")
         if response.status_code == httpx.codes.FORBIDDEN:
-            raise LicenseError("Site is not licensed for this operation")
+            raise RequestError(response.text or "Operation is not allowed")
         if response.status_code == httpx.codes.NOT_FOUND:
             raise RequestError(
                 "Requested item does not exist or "
                 "your operator does not have the privilege to view it"
             )
-        if response.status_code == httpx.codes.BAD_REQUEST:
-            raise RequestError(response.json()["message"])
+        if httpx.codes.is_error(response.status_code):
+            message = (
+                cast(dict[str, Any], response.json()).get("message")
+                or "Invalid operation"
+            )
+            raise RequestError(message)
         if response.status_code == httpx.codes.CREATED:
             return {"location": response.headers.get("location")}
         if response.status_code == httpx.codes.NO_CONTENT:
