@@ -560,7 +560,6 @@ class FTCardholderCard:
     @classmethod
     def from_dict(cls, kwargs: list[dict[str, Any]]) -> list[FTCardholderCard]:
         """Return FTCardholderCard object from dict."""
-        print(kwargs)
         return [
             from_dict(FTCardholderCard, card, config=Config(type_hooks=CONVERTERS))
             for card in kwargs
@@ -866,10 +865,10 @@ class FTEvent:
     group: FTItemType
     type: FTItemType
     eventType: FTItemType | None
-    division: FTItem
-    cardholder: FTCardholder | None  # check converter
-    entryAccessZone: FTItem
-    exitAccessZone: FTItem
+    division: FTItem | None
+    cardholder: FTCardholder | None
+    entryAccessZone: FTItem | None
+    exitAccessZone: FTItem | None
     door: FTLinkItem | None
     accessGroup: FTItemReference | None
     card: FTEventCard | None
@@ -878,7 +877,6 @@ class FTEvent:
     previous: FTItemReference | None
     next: FTItemReference | None
     updates: FTItemReference | None
-    # modified_item: str
 
     @classmethod
     def from_dict(cls, kwargs: dict[str, Any]) -> FTEvent:
