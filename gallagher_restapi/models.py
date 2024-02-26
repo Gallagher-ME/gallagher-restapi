@@ -727,7 +727,7 @@ class FTCardholder:
 class FTNewCardholder:
     """FTNewCardholder object class."""
 
-    division: FTItemReference
+    division: FTItemReference | None = None
     firstName: str | None = None
     lastName: str | None = None
     shortName: str | None = None
