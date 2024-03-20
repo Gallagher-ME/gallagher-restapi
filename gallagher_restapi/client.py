@@ -184,7 +184,7 @@ class Client:
                 f"{self.api_features.href('items')}/{id}",
                 extra_fields=extra_fields,
             ):
-                items = [FTItem(**response)]
+                items = [FTItem.from_dict(response)]
 
         else:
             type_ids: list[str] = []
@@ -202,7 +202,7 @@ class Client:
                 sort=sort,
                 top=top,
             )
-            items = [FTItem(**item) for item in response["results"]]
+            items = [FTItem.from_dict(item) for item in response["results"]]
         return items
 
     # region Access zone methods
