@@ -4,7 +4,12 @@ from unittest.mock import patch
 import pytest
 
 from gallagher_restapi.client import Client
-from gallagher_restapi.models import FTCardholderCard, FTItemReference, FTNewCardholder
+from gallagher_restapi.models import (
+    FTCardholderCard,
+    FTItemReference,
+    FTNewCardholder,
+    PDFType,
+)
 
 
 @pytest.mark.asyncio
@@ -78,8 +83,10 @@ async def test_get_card_type(gll_client: Client) -> None:
 @pytest.mark.asyncio
 async def test_get_personal_data_field(gll_client: Client) -> None:
     """Test getting personal data field."""
-    pdf_definitions = await gll_client.get_personal_data_field()
+    pdf_definitions = await gll_client.get_personal_data_field(id="404")
     assert len(pdf_definitions) >= 1
+    assert pdf_definitions[0].type == PDFType.STRENUM
+    assert pdf_definitions[0].strEnumList == ["Dubai", "Lebanon"]
     pdf_defenition = await gll_client.get_personal_data_field(id=pdf_definitions[0].id)
     assert len(pdf_defenition) == 1
 
