@@ -1,15 +1,18 @@
 """Gallagher item models."""
+
 from __future__ import annotations
 
 import json
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from datetime import datetime
 from enum import StrEnum
 from typing import Any, Type, TypeVar
 
 import pytz
 from dacite import Config, from_dict
+
+from gallagher_restapi.exceptions import LicenseError
 
 T = TypeVar("T")
 
@@ -81,12 +84,13 @@ class FTApiFeatures:
                 main_feature = feature
         except ValueError:
             raise ValueError("Incorrect syntax of feature.")
-
-        if not (attr := getattr(self, main_feature)):
+        if not hasattr(self, main_feature):
             raise ValueError(f"{main_feature} is not a valid feature")
-        if sub_feature and sub_feature not in attr:
+        if not (feature := getattr(self, main_feature)):
+            raise LicenseError(f"{main_feature} is not licensed for this site.")
+        if sub_feature and sub_feature not in feature:
             raise ValueError(f"{sub_feature} is not found in {main_feature}")
-        return attr[sub_feature or main_feature]["href"]
+        return feature[sub_feature or main_feature]["href"]
 
     @classmethod
     def from_dict(cls, kwargs: dict[str, Any]) -> FTApiFeatures:
@@ -126,6 +130,15 @@ class FTItem:
     href: str = ""
     type: dict = field(default_factory=dict)
     division: dict = field(default_factory=dict)
+    extra_fields: dict = field(default_factory=dict)
+
+    @classmethod
+    def from_dict(cls, kwargs: dict[str, Any]) -> FTItem:
+        """Return FTItem object from dict."""
+        _item = from_dict(data_class=FTItem, data=kwargs)
+        cls_fields = set(f.name for f in fields(_item))
+        _item.extra_fields = {k: v for k, v in kwargs.items() if k not in cls_fields}
+        return _item
 
 
 @dataclass
@@ -571,6 +584,18 @@ class FTCardholderCard:
 # region PDF definition models
 
 
+class PDFType(StrEnum):
+    STRING = "string"
+    IMAGE = "image"
+    STRENUM = "strEnum"
+    NUMERIC = "numeric"
+    DATE = "date"
+    ADDRESS = "address"
+    PHONE = "phone"
+    EMAIL = "email"
+    MOBILE = "mobile"
+
+
 @dataclass
 class FTPersonalDataFieldDefinition:
     """FTPersonalDataFieldDefinition class."""
@@ -580,7 +605,7 @@ class FTPersonalDataFieldDefinition:
     name: str
     serverDisplayName: str | None
     description: str | None
-    type: str | None
+    type: PDFType | None
     division: FTItem | None
     default: str | None
     defaultAccess: str | None
@@ -590,14 +615,17 @@ class FTPersonalDataFieldDefinition:
     regex: str | None
     regexDescription: str | None
     contentType: str | None
-    isProfileImage: bool = False
-    required: bool = False
-    unique: bool = False
+    isProfileImage: bool | None
+    required: bool | None
+    unique: bool | None
+    strEnumList: list[str] | None
 
     @classmethod
     def from_dict(cls, kwargs: dict[str, Any]) -> FTPersonalDataFieldDefinition:
         """Return FTPersonalDataFieldDefinition object from dict."""
-        return from_dict(FTPersonalDataFieldDefinition, kwargs)
+        return from_dict(
+            FTPersonalDataFieldDefinition, kwargs, config=Config(cast=[PDFType])
+        )
 
 
 # endregion pdf definition models
@@ -678,9 +706,9 @@ class FTCardholder:
     windowsUsername: str | None
     personalDataDefinitions: list[dict[str, FTCardholderPdfValue]] | None
     cards: list[FTCardholderCard] | dict[str, list[FTCardholderCard]] | None
-    accessGroups: list[FTAccessGroupMembership] | dict[
-        str, list[FTAccessGroupMembership]
-    ] | None
+    accessGroups: (
+        list[FTAccessGroupMembership] | dict[str, list[FTAccessGroupMembership]] | None
+    )
     # operator_groups: str
     # competencies: str
     # edit: str
@@ -738,9 +766,9 @@ class FTNewCardholder:
     windowsUsername: str | None = None
     personalDataDefinitions: list[dict[str, FTCardholderPdfValue]] | None = None
     cards: list[FTCardholderCard] | dict[str, list[FTCardholderCard]] | None = None
-    accessGroups: list[FTAccessGroupMembership] | dict[
-        str, list[FTAccessGroupMembership]
-    ] | None = None
+    accessGroups: (
+        list[FTAccessGroupMembership] | dict[str, list[FTAccessGroupMembership]] | None
+    ) = None
     notes: str | None = None
     lockers: Any | None = None
     elevatorGroups: Any | None = None

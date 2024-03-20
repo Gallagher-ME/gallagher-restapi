@@ -2,8 +2,8 @@
 import httpx
 import pytest
 
-from gallagher_restapi.client import Client
-from gallagher_restapi import UnauthorizedError
+from gallagher_restapi import Client, UnauthorizedError, LicenseError
+
 from . import CONFIG
 
 
@@ -40,3 +40,11 @@ async def test_wrong_api_key() -> None:
                 httpx_client=httpx_client,
             )
             await gll_client.initialize()
+
+
+@pytest.mark.asyncio
+async def test_feature_not_licensed(gll_client: Client) -> None:
+    """Test requsting a feature that is not licensed."""
+    gll_client.api_features.doors = None
+    with pytest.raises(LicenseError):
+        await gll_client.get_door(name="Test")
