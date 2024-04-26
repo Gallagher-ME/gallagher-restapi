@@ -720,7 +720,7 @@ class FTCardholder:
     lastPrintedOrEncodedTime: datetime | None
     lastPrintedOrEncodedIssueLevel: int | None
     # redactions: Any | None
-    pdfs: dict[str, str | FTItemReference] = field(default_factory=dict)
+    pdfs: dict[str, str | int | FTItemReference] = field(default_factory=dict)
     authorised: bool = False
     operatorLoginEnabled: bool = False
     operatorPasswordExpired: bool = False
