@@ -1,4 +1,5 @@
 """Gallagher REST api python library."""
+
 import asyncio
 import base64
 import logging
@@ -124,8 +125,6 @@ class Client:
         )
         if response.status_code == httpx.codes.UNAUTHORIZED:
             raise UnauthorizedError("Unauthorized request. Ensure api key is correct")
-        if response.status_code == httpx.codes.FORBIDDEN:
-            raise RequestError(response.text or "Operation is not allowed")
         if response.status_code == httpx.codes.NOT_FOUND:
             raise RequestError(
                 "Requested item does not exist or "
