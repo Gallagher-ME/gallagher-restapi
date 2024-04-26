@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "gallagher-restapi"
-version = "1.0.4"
+version = "1.0.5"
 description = ""
 authors = ["Rami Mosleh <engrbm87@gmail.com>"]
 packages = [{include = "gallagher_restapi"}]
@@ -8,7 +8,7 @@ exclude = ["examples.py"]
 
 [tool.poetry.dependencies]
 python = "^3.11"
-httpx = "^0.26.0"
+httpx = "^0.27.0"
 pytz = "^2024.1"
 dacite = "^1.8.1"
 
