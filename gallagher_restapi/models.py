@@ -685,6 +685,15 @@ class FTCardholderPdfValue:
 
 
 @dataclass
+class FTCardholderRelationship:
+    """FTCardholder relationship     class."""
+
+    href: str
+    role: FTLinkItem
+    cardholder: FTLinkItem
+
+
+@dataclass
 class FTCardholder:
     """FTCardholder details class."""
 
@@ -714,7 +723,7 @@ class FTCardholder:
     # edit: str
     updateLocation: FTItemReference | None
     notes: str | None
-    # relationships: Any | None
+    relationships: list[FTCardholderRelationship] | None
     lockers: Any | None
     elevatorGroups: Any | None
     lastPrintedOrEncodedTime: datetime | None
