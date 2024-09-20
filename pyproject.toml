@@ -26,3 +26,9 @@ build-backend = "poetry.core.masonry.api"
 ignore = [
 "E731",  # do not assign a lambda expression, use a def
 ]
+
+[tool.pylint."MESSAGES CONTROL"]
+disable = [
+    "too-many-instance-attributes",
+    "invalid-name", # N815
+]
