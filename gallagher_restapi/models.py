@@ -487,6 +487,42 @@ class FTAccessGroupMembership:
 
 # endregion Access groups models
 
+# region Operator groups models
+
+
+@dataclass
+class FTOperatorGroupMembership:
+    """FTOperatorGroupMembership item base class."""
+
+    cardholder: FTLinkItem
+    href: str | None
+
+    @classmethod
+    def from_dict(cls, kwargs: dict[str, Any]) -> FTOperatorGroupMembership:
+        """Return list of FTOperatorGroupMembership objects from dict."""
+        return from_dict(data_class=FTOperatorGroupMembership, data=kwargs)
+
+
+@dataclass
+class FTOperatorGroup:
+    """FTOperatorGroup item base class."""
+
+    href: str
+    name: str
+    description: str | None
+    division: FTItem | None
+    cardholders: FTItemReference | None
+    serverDisplayName: str | None
+    divisions: list[dict[str, FTLinkItem]] | None
+
+    @classmethod
+    def from_dict(cls, kwargs: dict[str, Any]) -> FTOperatorGroup:
+        """Return FTOperatorGroup object from dict."""
+        return from_dict(data_class=FTOperatorGroup, data=kwargs)
+
+
+# endregion Operator groups models
+
 
 # region Card type models
 @dataclass
