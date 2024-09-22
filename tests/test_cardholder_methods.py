@@ -1,4 +1,5 @@
 """Test cardholder methods."""
+
 from datetime import datetime
 from unittest.mock import patch
 import pytest
@@ -31,6 +32,16 @@ async def test_get_cardholder_by_pdf_value(gll_client: Client) -> None:
     """Test getting cardholder by pdf value."""
     cardholder = await gll_client.get_cardholder(pdfs={"Email": "newemail@mail.com"})
     assert len(cardholder) == 1
+
+
+@pytest.mark.asyncio
+async def test_get_cardholder_relationships(gll_client: Client) -> None:
+    """Test getting cardholder relationships."""
+    cardholder = await gll_client.get_cardholder(
+        name="Rami", top=2, extra_fields=["relationships"]
+    )
+    assert cardholder[1].relationships is not None
+    assert cardholder[1].relationships[0].cardholder.name == "Sharbil Khalil"
 
 
 @pytest.mark.asyncio
