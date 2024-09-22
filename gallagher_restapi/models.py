@@ -70,6 +70,7 @@ class FTApiFeatures:
     roles: dict[str, Any] | None
     schedules: dict[str, Any] | None
     visits: dict[str, Any] | None
+    lockers: dict[str, Any] | None
 
     def href(self, feature: str) -> str:
         """
@@ -82,8 +83,8 @@ class FTApiFeatures:
                 main_feature, sub_feature = feature.split("/")
             else:
                 main_feature = feature
-        except ValueError:
-            raise ValueError("Incorrect syntax of feature.")
+        except ValueError as err:
+            raise ValueError("Incorrect syntax of feature.") from err
         if not hasattr(self, main_feature):
             raise ValueError(f"{main_feature} is not a valid feature")
         if not (feature := getattr(self, main_feature)):
@@ -1091,6 +1092,100 @@ class FTItemStatus:
 
 # endregion Item status and overrides
 
+
+# region Lockers models
+@dataclass
+class FTLockerCommands:
+    """FTDoor commands base class."""
+
+    open: FTItemReference
+    quarantine: FTItemReference
+    quarantineUntil: FTItemReference
+    cancelQuarantine: FTItemReference
+
+
+@dataclass
+class LockerAssignment:
+    """Locker assignment class."""
+
+    href: str
+    cardholder: FTLinkItem
+    active_from: datetime | None
+    active_until: datetime | None
+
+    @classmethod
+    def from_dict(cls, kwargs: list[dict[str, Any]]) -> list[LockerAssignment]:
+        """Return FTLocker object from dict."""
+        locker_assignments: list[LockerAssignment] = []
+        for assignment in kwargs:
+            if "from" in kwargs:
+                assignment["active_from"] = assignment.pop("from")
+            if "until" in kwargs:
+                assignment["active_until"] = assignment.pop("until")
+            locker_assignments.append(
+                from_dict(
+                    LockerAssignment,
+                    data=assignment,
+                    config=Config(type_hooks=CONVERTERS),
+                )
+            )
+        return locker_assignments
+
+
+@dataclass
+class FTLocker:
+    """Locker class."""
+
+    name: str | None
+    href: str
+    shortName: str | None
+    description: str | None
+    division: FTItem | None
+    connectedController: FTItem | None
+    assignments: list[LockerAssignment] | None
+
+    @classmethod
+    def from_list(cls, kwargs: list[dict[str, Any]]) -> list[FTLocker]:
+        """Return list of FTLocker objects from dict."""
+        return [
+            from_dict(
+                data_class=FTLocker, data=locker, config=Config(type_hooks=CONVERTERS)
+            )
+            for locker in kwargs
+        ]
+
+    @classmethod
+    def from_dict(cls, kwargs: dict[str, Any]) -> FTLocker:
+        """Return FTLocker object from dict."""
+        return from_dict(
+            data_class=FTLocker, data=kwargs, config=Config(type_hooks=CONVERTERS)
+        )
+
+
+@dataclass
+class FTLockerBank:
+    """Locker Bank class."""
+
+    name: str
+    href: str
+    shortName: str | None
+    description: str | None
+    division: FTItem | None
+    notes: str | None
+    connectedController: FTItem | None
+    lockers: list[FTLocker] | None
+    updates: FTItemReference | None
+
+    @classmethod
+    def from_dict(cls, kwargs: dict[str, Any]) -> FTLockerBank:
+        """Return FTLockerBank object from dict."""
+        return from_dict(
+            data_class=FTLockerBank, data=kwargs, config=Config(type_hooks=CONVERTERS)
+        )
+
+
+# endregion Lockers models
+
 CONVERTERS: dict[Any, Callable[[Any], Any]] = {
     datetime: lambda x: datetime.fromisoformat(x[:-1]).replace(tzinfo=pytz.utc),  # type: ignore[index]
     FTAccessZoneCommands: lambda x: verify_commands(FTAccessZoneCommands, x),
@@ -1102,6 +1197,9 @@ CONVERTERS: dict[Any, Callable[[Any], Any]] = {
     list[dict[str, FTCardholderPdfValue]]: FTCardholderPdfValue.from_dict,
     list[FTCardholderCard]: FTCardholderCard.from_dict,
     list[FTAccessGroupMembership]: FTAccessGroupMembership.from_dict,
+    list[FTLocker]: FTLocker.from_list,
+    list[LockerAssignment]: LockerAssignment.from_dict,
+    FTLockerCommands: lambda x: verify_commands(FTLockerCommands, x),
 }
 
 

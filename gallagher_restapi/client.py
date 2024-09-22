@@ -20,6 +20,8 @@ from .models import (
     FTFenceZone,
     FTInput,
     FTLinkItem,
+    FTLocker,
+    FTLockerBank,
     FTNewCardholder,
     FTOperatorGroup,
     FTOperatorGroupMembership,
@@ -837,3 +839,51 @@ class Client:
         )
 
     # endregion Status and override methods
+
+    # region Lockers methods
+
+    async def get_locker_bank(
+        self,
+        *,
+        id: str | None = None,
+        name: str | None = None,
+        description: str | None = None,
+        extra_fields: list[str] | None = None,
+        division: list[str] | None = None,
+        sort: SortMethod | None = None,
+        top: int | None = None,
+    ) -> list[FTLockerBank]:
+        """Return list of locker banks."""
+        locker_banks: list[FTLockerBank] = []
+        if id:
+            response: dict[str, Any] = await self._async_request(
+                HTTPMethods.GET, f"{self.api_features.href('lockerBanks')}/{id}"
+            )
+            if response:
+                locker_banks = [FTLockerBank.from_dict(response)]
+        else:
+            response = await self._async_request(
+                HTTPMethods.GET,
+                self.api_features.href("lockerBanks"),
+                extra_fields=extra_fields,
+                name=name,
+                description=description,
+                division=division,
+                sort=sort,
+                top=top,
+            )
+            locker_banks = [
+                FTLockerBank.from_dict(locker) for locker in response["results"]
+            ]
+        return locker_banks
+
+    async def get_locker(self, id: str | None = None) -> FTLocker | None:
+        """Return locker object."""
+        response: dict[str, Any] = await self._async_request(
+            HTTPMethods.GET, f"{self.server_url}/api/lockers/{id}"
+        )
+        return FTLocker.from_dict(response) if response else None
+
+    async def override_locker(self, command: FTItemReference) -> None:
+        """override locker."""
+        await self._async_request(HTTPMethods.POST, command.href)
