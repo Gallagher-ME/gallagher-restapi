@@ -19,7 +19,10 @@ from .models import (
     FTCardType,
     FTFenceZone,
     FTInput,
+    FTLinkItem,
     FTNewCardholder,
+    FTOperatorGroup,
+    FTOperatorGroupMembership,
     FTOutput,
     SortMethod,
     EventFilter,
@@ -571,6 +574,42 @@ class Client:
                 FTAccessGroup.from_dict(item) for item in response["results"]
             ]
         return access_groups
+
+    async def get_operator_group(
+        self,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        extra_fields: list[str] | None = None,
+        division: list[str] | None = None,
+        sort: SortMethod | None = None,
+        top: int | None = None,
+    ) -> list[FTOperatorGroup]:
+        """Get Operator groups."""
+        response = await self._async_request(
+            HTTPMethods.GET,
+            self.api_features.href("operatorGroups"),
+            extra_fields=extra_fields or ["cardholders"],
+            name=name,
+            description=description,
+            division=division,
+            sort=sort,
+            top=top,
+        )
+        return [FTOperatorGroup.from_dict(item) for item in response["results"]]
+
+    async def get_operator_group_members(
+        self, *, href: str, extra_fields: list[str] | None = None
+    ) -> list[FTLinkItem]:
+        """Get Operator group members."""
+        response = await self._async_request(
+            HTTPMethods.GET, href, extra_fields=extra_fields
+        )
+        operator_group_memberships = [
+            FTOperatorGroupMembership.from_dict(item)
+            for item in response["cardholders"]
+        ]
+        return [item.cardholder for item in operator_group_memberships]
 
     async def get_personal_data_field(
         self,
