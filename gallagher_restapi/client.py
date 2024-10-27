@@ -482,7 +482,8 @@ class Client:
         doors: list[FTDoor] = []
         if id:
             response: dict[str, Any] = await self._async_request(
-                HTTPMethods.GET, f"{self.api_features.href('doors')}/{id}"
+                HTTPMethods.GET, f"{self.api_features.href('doors')}/{id}",
+                extra_fields=extra_fields,
             )
             if response:
                 doors = [FTDoor.from_dict(response)]
@@ -557,7 +558,8 @@ class Client:
         access_groups: list[FTAccessGroup] = []
         if id:
             response: dict[str, Any] = await self._async_request(
-                HTTPMethods.GET, f"{self.api_features.href('accessGroups')}/{id}"
+                HTTPMethods.GET, f"{self.api_features.href('accessGroups')}/{id}",
+                extra_fields=extra_fields,
             )
             if response:
                 access_groups = [FTAccessGroup.from_dict(response)]
@@ -857,7 +859,7 @@ class Client:
         locker_banks: list[FTLockerBank] = []
         if id:
             response: dict[str, Any] = await self._async_request(
-                HTTPMethods.GET, f"{self.api_features.href('lockerBanks')}/{id}"
+                HTTPMethods.GET, f"{self.api_features.href('lockerBanks')}/{id}",extra_fields=extra_fields,
             )
             if response:
                 locker_banks = [FTLockerBank.from_dict(response)]
