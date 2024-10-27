@@ -802,13 +802,15 @@ class FTNewCardholder:
     operatorPassword: str | None = None
     windowsUsername: str | None = None
     personalDataDefinitions: list[dict[str, FTCardholderPdfValue]] | None = None
-    cards: list[FTCardholderCard] | dict[str, list[FTCardholderCard]] | None = None
+    cards: list[FTCardholderCard] | dict[str, list[FTCardholderCard]] | None = field(
+        default_factory=dict
+    )
     accessGroups: (
         list[FTAccessGroupMembership] | dict[str, list[FTAccessGroupMembership]] | None
-    ) = None
+    ) = field(default_factory=dict)
     notes: str | None = None
     lockers: list[FTLockerMembership] | dict[str, list[FTLockerMembership]] | None = (
-        None
+        field(default_factory=dict)
     )
     elevatorGroups: Any | None = None
     pdfs: dict[str, Any] = field(default_factory=dict)
@@ -839,33 +841,16 @@ class FTNewCardholder:
         **kwargs: Any,
     ) -> None:
         """Return FTCardholder object from dict."""
-        self.cards = {}
-        self.accessGroups = {}
-        self.lockers = {}
-        if add:
-            for item in add:
-                if isinstance(item, FTCardholderCard):
-                    self.cards.setdefault("add", []).append(item)
-                elif isinstance(item, FTAccessGroupMembership):
-                    self.accessGroups.setdefault("add", []).append(item)
-                elif isinstance(item, FTLockerMembership):
-                    self.lockers.setdefault("add", []).append(item)
-        if update:
-            for item in update:
-                if isinstance(item, FTCardholderCard):
-                    self.cards.setdefault("update", []).append(item)
-                elif isinstance(item, FTAccessGroupMembership):
-                    self.accessGroups.setdefault("update", []).append(item)
-                elif isinstance(item, FTLockerMembership):
-                    self.lockers.setdefault("update", []).append(item)
-        if remove:
-            for item in remove:
-                if isinstance(item, FTCardholderCard):
-                    self.cards.setdefault("remove", []).append(item)
-                elif isinstance(item, FTAccessGroupMembership):
-                    self.accessGroups.setdefault("remove", []).append(item)
-                elif isinstance(item, FTLockerMembership):
-                    self.lockers.setdefault("remove", []).append(item)
+        attr_class = {
+            "FTCardholderCard": "cards",
+            "FTAccessGroupMembership": "accessGroups",
+            "FTLockerMembership": "lockers",
+        }
+        for action, items in {"add": add, "update": update, "remove": remove}.items():
+            for item in items or []:
+                if (item_type := type(item).__name__) not in attr_class:
+                    continue
+                getattr(self, attr_class[item_type]).setdefault(action, []).append(item)
 
         for key, value in kwargs.items():
             try:

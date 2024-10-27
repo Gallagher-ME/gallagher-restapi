@@ -1,4 +1,5 @@
 """Test cardholder methods."""
+
 from datetime import datetime
 from unittest.mock import patch
 import pytest
@@ -53,8 +54,8 @@ async def test_add_cardholder(gll_client: Client) -> None:
 @pytest.mark.asyncio
 async def test_update_cardholder(gll_client: Client) -> None:
     """Test updating a cardholder."""
-    card_types = await gll_client.get_card_type(name="Test")
-    test_cardholder = await gll_client.get_cardholder(id="1012")
+    card_types = await gll_client.get_card_type()
+    test_cardholder = await gll_client.get_cardholder(id="681")
     assert test_cardholder[0].division
     updated_cardholder = FTNewCardholder()
     updated_cardholder.patch(
@@ -64,7 +65,8 @@ async def test_update_cardholder(gll_client: Client) -> None:
                 number="4",
                 active_from=datetime(2024, 2, 10),
             )
-        ]
+        ],
+        remove=test_cardholder[0].accessGroups,
     )
     await gll_client.update_cardholder(test_cardholder[0].href, updated_cardholder)
 
