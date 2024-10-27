@@ -752,7 +752,7 @@ class FTCardholder:
     updateLocation: FTItemReference | None
     notes: str | None
     # relationships: Any | None
-    lockers: Any | None
+    lockers: list[FTLockerMembership] | dict[str, list[FTLockerMembership]] | None
     elevatorGroups: Any | None
     lastPrintedOrEncodedTime: datetime | None
     lastPrintedOrEncodedIssueLevel: int | None
@@ -807,7 +807,9 @@ class FTNewCardholder:
         list[FTAccessGroupMembership] | dict[str, list[FTAccessGroupMembership]] | None
     ) = None
     notes: str | None = None
-    lockers: Any | None = None
+    lockers: list[FTLockerMembership] | dict[str, list[FTLockerMembership]] | None = (
+        None
+    )
     elevatorGroups: Any | None = None
     pdfs: dict[str, Any] = field(default_factory=dict)
     authorised: bool | None = None
@@ -828,33 +830,42 @@ class FTNewCardholder:
 
     def patch(
         self,
-        add: list[FTCardholderCard | FTAccessGroupMembership] | None = None,
-        update: list[FTCardholderCard | FTAccessGroupMembership] | None = None,
-        remove: list[FTCardholderCard | FTAccessGroupMembership] | None = None,
+        add: list[FTCardholderCard | FTAccessGroupMembership | FTLockerMembership]
+        | None = None,
+        update: list[FTCardholderCard | FTAccessGroupMembership | FTLockerMembership]
+        | None = None,
+        remove: list[FTCardholderCard | FTAccessGroupMembership | FTLockerMembership]
+        | None = None,
         **kwargs: Any,
     ) -> None:
         """Return FTCardholder object from dict."""
         self.cards = {}
         self.accessGroups = {}
+        self.lockers = {}
         if add:
             for item in add:
                 if isinstance(item, FTCardholderCard):
                     self.cards.setdefault("add", []).append(item)
                 elif isinstance(item, FTAccessGroupMembership):
                     self.accessGroups.setdefault("add", []).append(item)
+                elif isinstance(item, FTLockerMembership):
+                    self.lockers.setdefault("add", []).append(item)
         if update:
             for item in update:
                 if isinstance(item, FTCardholderCard):
                     self.cards.setdefault("update", []).append(item)
                 elif isinstance(item, FTAccessGroupMembership):
                     self.accessGroups.setdefault("update", []).append(item)
+                elif isinstance(item, FTLockerMembership):
+                    self.lockers.setdefault("update", []).append(item)
         if remove:
             for item in remove:
                 if isinstance(item, FTCardholderCard):
                     self.cards.setdefault("remove", []).append(item)
-
                 elif isinstance(item, FTAccessGroupMembership):
                     self.accessGroups.setdefault("remove", []).append(item)
+                elif isinstance(item, FTLockerMembership):
+                    self.lockers.setdefault("remove", []).append(item)
 
         for key, value in kwargs.items():
             try:
@@ -1110,39 +1121,85 @@ class LockerAssignment:
 
     href: str
     cardholder: FTLinkItem
-    active_from: datetime | None
-    active_until: datetime | None
+    from_: datetime | None
+    until: datetime | None
 
     @classmethod
     def from_dict(cls, kwargs: list[dict[str, Any]]) -> list[LockerAssignment]:
         """Return FTLocker object from dict."""
-        locker_assignments: list[LockerAssignment] = []
-        for assignment in kwargs:
-            if "from" in kwargs:
-                assignment["active_from"] = assignment.pop("from")
-            if "until" in kwargs:
-                assignment["active_until"] = assignment.pop("until")
-            locker_assignments.append(
-                from_dict(
-                    LockerAssignment,
-                    data=assignment,
-                    config=Config(type_hooks=CONVERTERS),
-                )
+        return [
+            from_dict(
+                LockerAssignment,
+                data=assignment,
+                config=Config(type_hooks=CONVERTERS),
             )
-        return locker_assignments
+            for assignment in kwargs
+        ]
+
+
+@dataclass
+class FTLockerMembership:
+    """Locker membership class."""
+
+    href: str | None
+    locker: FTLinkItem | None
+    from_: datetime | None = None
+    until: datetime | None = None
+
+    @property
+    def to_dic(self) -> dict[str, Any]:
+        """Return a dict from object."""
+        _dict: dict[str, Any] = {}
+        if self.href:
+            _dict["href"] = self.href
+        if self.from_:
+            _dict["from"] = f"{self.from_.isoformat()}Z"
+        if self.until:
+            _dict["until"] = f"{self.until.isoformat()}Z"
+        return _dict
+
+    @classmethod
+    def add_membership(
+        cls,
+        locker: FTLocker,
+        active_from: datetime | None = None,
+        active_until: datetime | None = None,
+    ) -> FTLockerMembership:
+        """Create an FTLocker item to assign."""
+        kwargs: dict[str, Any] = {"locker": {"name": locker.name, "href": locker.href}}
+        if active_from:
+            kwargs["active_from"] = active_from
+        if active_until:
+            kwargs["active_until"] = active_until
+        return from_dict(FTLockerMembership, kwargs)
+
+    @classmethod
+    def from_dict(cls, kwargs: list[dict[str, Any]]) -> list[FTLockerMembership]:
+        """Return FTLockerMembership object from dict."""
+        return [
+            from_dict(
+                FTLockerMembership,
+                locker,
+                config=Config(type_hooks=CONVERTERS),
+            )
+            for locker in kwargs
+        ]
 
 
 @dataclass
 class FTLocker:
     """Locker class."""
 
-    name: str | None
+    id: str
     href: str
+    name: str | None
     shortName: str | None
     description: str | None
     division: FTItem | None
+    lockerBank: FTLinkItem | None
     connectedController: FTItem | None
     assignments: list[LockerAssignment] | None
+    commands: FTLockerCommands | None
 
     @classmethod
     def from_list(cls, kwargs: list[dict[str, Any]]) -> list[FTLocker]:
@@ -1166,8 +1223,9 @@ class FTLocker:
 class FTLockerBank:
     """Locker Bank class."""
 
-    name: str
+    id: str
     href: str
+    name: str
     shortName: str | None
     description: str | None
     division: FTItem | None
