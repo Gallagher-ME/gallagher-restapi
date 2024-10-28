@@ -482,7 +482,8 @@ class Client:
         doors: list[FTDoor] = []
         if id:
             response: dict[str, Any] = await self._async_request(
-                HTTPMethods.GET, f"{self.api_features.href('doors')}/{id}",
+                HTTPMethods.GET,
+                f"{self.api_features.href('doors')}/{id}",
                 extra_fields=extra_fields,
             )
             if response:
@@ -558,7 +559,8 @@ class Client:
         access_groups: list[FTAccessGroup] = []
         if id:
             response: dict[str, Any] = await self._async_request(
-                HTTPMethods.GET, f"{self.api_features.href('accessGroups')}/{id}",
+                HTTPMethods.GET,
+                f"{self.api_features.href('accessGroups')}/{id}",
                 extra_fields=extra_fields,
             )
             if response:
@@ -629,7 +631,9 @@ class Client:
         pdfs: list[FTPersonalDataFieldDefinition] = []
         if id:
             response: dict[str, Any] = await self._async_request(
-                HTTPMethods.GET, f"{self.api_features.href('personalDataFields')}/{id}"
+                HTTPMethods.GET,
+                f"{self.api_features.href('personalDataFields')}/{id}",
+                extra_fields=extra_fields,
             )
             if response:
                 pdfs = [FTPersonalDataFieldDefinition.from_dict(response)]
@@ -673,7 +677,9 @@ class Client:
         cardholders: list[FTCardholder] = []
         if id:
             response: dict[str, Any] = await self._async_request(
-                HTTPMethods.GET, f"{self.api_features.href('cardholders')}/{id}"
+                HTTPMethods.GET,
+                f"{self.api_features.href('cardholders')}/{id}",
+                extra_fields=extra_fields,
             )
             if response:
                 cardholders = [FTCardholder.from_dict(response)]
@@ -859,7 +865,9 @@ class Client:
         locker_banks: list[FTLockerBank] = []
         if id:
             response: dict[str, Any] = await self._async_request(
-                HTTPMethods.GET, f"{self.api_features.href('lockerBanks')}/{id}",extra_fields=extra_fields,
+                HTTPMethods.GET,
+                f"{self.api_features.href('lockerBanks')}/{id}",
+                extra_fields=extra_fields,
             )
             if response:
                 locker_banks = [FTLockerBank.from_dict(response)]
