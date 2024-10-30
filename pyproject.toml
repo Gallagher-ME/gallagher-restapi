@@ -29,6 +29,10 @@ ignore = [
 
 [tool.pylint."MESSAGES CONTROL"]
 disable = [
-    "too-many-instance-attributes",
     "invalid-name", # N815
+    "too-many-arguments",
+    "too-many-instance-attributes",
+    "too-many-public-methods",
+    "too-many-branches", # PLR0912
+    "redefined-builtin", # A001
 ]

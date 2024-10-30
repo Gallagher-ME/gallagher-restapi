@@ -4,29 +4,15 @@ import asyncio
 import base64
 import logging
 from datetime import datetime
+from enum import StrEnum
+from json import JSONDecodeError
 from ssl import SSLError
 from typing import Any, AsyncIterator, cast
 
 import httpx
 
-from .exceptions import (
-    ConnectError,
-    GllApiError,
-    RequestError,
-    UnauthorizedError,
-)
+from .exceptions import ConnectError, GllApiError, RequestError, UnauthorizedError
 from .models import (
-    FTCardType,
-    FTFenceZone,
-    FTInput,
-    FTLinkItem,
-    FTLocker,
-    FTLockerBank,
-    FTNewCardholder,
-    FTOperatorGroup,
-    FTOperatorGroupMembership,
-    FTOutput,
-    SortMethod,
     EventFilter,
     EventPost,
     FTAccessGroup,
@@ -34,17 +20,35 @@ from .models import (
     FTAlarmZone,
     FTApiFeatures,
     FTCardholder,
+    FTCardType,
     FTDoor,
     FTEvent,
     FTEventGroup,
+    FTFenceZone,
+    FTInput,
     FTItem,
     FTItemReference,
     FTItemStatus,
+    FTLinkItem,
+    FTLocker,
+    FTLockerBank,
+    FTNewCardholder,
+    FTOperatorGroup,
+    FTOperatorGroupMembership,
+    FTOutput,
     FTPersonalDataFieldDefinition,
     HTTPMethods,
+    SortMethod,
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+class CloudGateway(StrEnum):
+    """Cloud Gateways."""
+
+    AU_GATEWAY = "commandcentre-api-au.security.gallagher.cloud"
+    US_GATEWAY = "commandcentre-api-us.security.gallagher.cloud"
 
 
 class Client:
@@ -56,10 +60,14 @@ class Client:
         *,
         host: str = "localhost",
         port: int = 8904,
+        cloud_gateway: CloudGateway | None = None,
         token: str | None = None,
         httpx_client: httpx.AsyncClient | None = None,
     ) -> None:
         """Initialize REST api client."""
+        if cloud_gateway is not None:
+            host = cloud_gateway.value
+            port = 443
         self.server_url = f"https://{host}:{port}"
         self.httpx_client: httpx.AsyncClient = httpx_client or httpx.AsyncClient(
             verify=False
@@ -99,16 +107,19 @@ class Client:
             if "defaults" not in extra_fields:
                 extra_fields.append("defaults")
             params["fields"] = ",".join(extra_fields)
-        if division:
-            params["division"] = ",".join(division)
-        if name:
-            params["name"] = name
-        if description:
-            params["description"] = description
-        if sort:
-            params["sort"] = sort
-        if top:
-            params["top"] = top
+        params.update(
+            {
+                key: value
+                for key, value in {
+                    "division": ",".join(division) if division else None,
+                    "name": name,
+                    "description": description,
+                    "sort": sort,
+                    "top": top,
+                }.items()
+                if value is not None
+            }
+        )
 
         _LOGGER.debug(
             "Sending %s request to endpoint: %s, data: %s, params: %s",
@@ -128,18 +139,25 @@ class Client:
         _LOGGER.debug(
             "status_code: %s, response: %s", response.status_code, response.text
         )
-        if response.status_code == httpx.codes.UNAUTHORIZED:
-            raise UnauthorizedError("Unauthorized request. Ensure api key is correct")
-        if response.status_code == httpx.codes.NOT_FOUND:
-            raise RequestError(
-                "Requested item does not exist or "
-                "your operator does not have the privilege to view it"
-            )
         if httpx.codes.is_error(response.status_code):
-            message = (
-                cast(dict[str, Any], response.json()).get("message")
-                or "Invalid operation"
-            )
+            if response.status_code == httpx.codes.UNAUTHORIZED:
+                raise UnauthorizedError(
+                    "Unauthorized request. Ensure api key is correct"
+                )
+            if response.status_code == httpx.codes.NOT_FOUND:
+                message = (
+                    "Requested item does not exist or "
+                    "your operator does not have the privilege to view it"
+                )
+            elif response.status_code == httpx.codes.SERVICE_UNAVAILABLE:
+                message = "Service Unavailable"
+            else:
+                try:
+                    message = cast(dict[str, Any], response.json()).get(
+                        "message", "Invalid operation"
+                    )
+                except JSONDecodeError:
+                    message = "Unknown error"
             raise RequestError(message)
         if response.status_code == httpx.codes.CREATED:
             return {"location": response.headers.get("location")}
