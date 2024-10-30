@@ -242,12 +242,11 @@ class Client:
         """Get Access zones filtered by name."""
         access_zones: list[FTAccessZone] = []
         if id:
-            response: dict[str, Any] = await self._async_request(
+            if response := await self._async_request(
                 HTTPMethods.GET,
                 f"{self.api_features.href('accessZones')}/{id}",
                 extra_fields=extra_fields,
-            )
-            if response:
+            ):
                 access_zones = [FTAccessZone.from_dict(response)]
         else:
             response = await self._async_request(
@@ -301,12 +300,11 @@ class Client:
         """Return list of Alarm zone items."""
         alarm_zones: list[FTAlarmZone] = []
         if id:
-            response: dict[str, Any] = await self._async_request(
+            if response := await self._async_request(
                 HTTPMethods.GET,
                 f"{self.api_features.href('alarmZones')}/{id}",
                 extra_fields=extra_fields,
-            )
-            if response:
+            ):
                 alarm_zones = [FTAlarmZone.from_dict(response)]
         else:
             response = await self._async_request(
@@ -355,12 +353,11 @@ class Client:
         """Get Fence zones with filteration."""
         fence_zones: list[FTFenceZone] = []
         if id:
-            response: dict[str, Any] = await self._async_request(
+            if response := await self._async_request(
                 HTTPMethods.GET,
                 f"{self.api_features.href('fenceZones')}/{id}",
                 extra_fields=extra_fields,
-            )
-            if response:
+            ):
                 fence_zones = [FTFenceZone.from_dict(response)]
         else:
             response = await self._async_request(
@@ -400,12 +397,11 @@ class Client:
         """Return list of Alarm zone items."""
         inputs: list[FTInput] = []
         if id:
-            response: dict[str, Any] = await self._async_request(
+            if response := await self._async_request(
                 HTTPMethods.GET,
                 f"{self.api_features.href('inputs')}/{id}",
                 extra_fields=extra_fields,
-            )
-            if response:
+            ):
                 inputs = [FTInput.from_dict(response)]
         else:
             response = await self._async_request(
@@ -445,12 +441,11 @@ class Client:
         """Return list of output items."""
         outputs: list[FTOutput] = []
         if id:
-            response: dict[str, Any] = await self._async_request(
+            if response := await self._async_request(
                 HTTPMethods.GET,
                 f"{self.api_features.href('outputs')}/{id}",
                 extra_fields=extra_fields,
-            )
-            if response:
+            ):
                 outputs = [FTOutput.from_dict(response)]
         else:
             response = await self._async_request(
@@ -499,12 +494,11 @@ class Client:
         """Return list of doors."""
         doors: list[FTDoor] = []
         if id:
-            response: dict[str, Any] = await self._async_request(
+            if response := await self._async_request(
                 HTTPMethods.GET,
                 f"{self.api_features.href('doors')}/{id}",
                 extra_fields=extra_fields,
-            )
-            if response:
+            ):
                 doors = [FTDoor.from_dict(response)]
         else:
             response = await self._async_request(
@@ -541,12 +535,11 @@ class Client:
         """Return list of card type items."""
         card_types: list[FTCardType] = []
         if id:
-            response: dict[str, Any] = await self._async_request(
+            if response := await self._async_request(
                 HTTPMethods.GET,
                 f"{self.api_features.href('cardTypes')}/{id}",
                 extra_fields=extra_fields,
-            )
-            if response:
+            ):
                 card_types = [FTCardType.from_dict(response)]
         else:
             response = await self._async_request(
@@ -576,12 +569,11 @@ class Client:
         """Get Access groups filtered by name."""
         access_groups: list[FTAccessGroup] = []
         if id:
-            response: dict[str, Any] = await self._async_request(
+            if response := await self._async_request(
                 HTTPMethods.GET,
                 f"{self.api_features.href('accessGroups')}/{id}",
                 extra_fields=extra_fields,
-            )
-            if response:
+            ):
                 access_groups = [FTAccessGroup.from_dict(response)]
         else:
             response = await self._async_request(
@@ -648,12 +640,11 @@ class Client:
         """Return List of available personal data fields."""
         pdfs: list[FTPersonalDataFieldDefinition] = []
         if id:
-            response: dict[str, Any] = await self._async_request(
+            if response := await self._async_request(
                 HTTPMethods.GET,
                 f"{self.api_features.href('personalDataFields')}/{id}",
                 extra_fields=extra_fields,
-            )
-            if response:
+            ):
                 pdfs = [FTPersonalDataFieldDefinition.from_dict(response)]
         else:
             response = await self._async_request(
@@ -694,12 +685,11 @@ class Client:
         """Return list of cardholders."""
         cardholders: list[FTCardholder] = []
         if id:
-            response: dict[str, Any] = await self._async_request(
+            if response := await self._async_request(
                 HTTPMethods.GET,
                 f"{self.api_features.href('cardholders')}/{id}",
                 extra_fields=extra_fields,
-            )
-            if response:
+            ):
                 cardholders = [FTCardholder.from_dict(response)]
         else:
             params: dict[str, str] = {}
@@ -842,7 +832,6 @@ class Client:
     # endregion Event methods
 
     # region Status and override methods
-
     async def get_item_status(
         self,
         item_ids: list[str] | None = None,
@@ -867,7 +856,6 @@ class Client:
     # endregion Status and override methods
 
     # region Lockers methods
-
     async def get_locker_bank(
         self,
         *,
@@ -882,12 +870,11 @@ class Client:
         """Return list of locker banks."""
         locker_banks: list[FTLockerBank] = []
         if id:
-            response: dict[str, Any] = await self._async_request(
+            if response := await self._async_request(
                 HTTPMethods.GET,
                 f"{self.api_features.href('lockerBanks')}/{id}",
                 extra_fields=extra_fields,
-            )
-            if response:
+            ):
                 locker_banks = [FTLockerBank.from_dict(response)]
         else:
             response = await self._async_request(
@@ -915,3 +902,5 @@ class Client:
     async def override_locker(self, command: FTItemReference) -> None:
         """override locker."""
         await self._async_request(HTTPMethods.POST, command.href)
+
+    # endregion Lockers methods

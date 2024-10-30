@@ -18,18 +18,12 @@ T = TypeVar("T")
 
 
 class HTTPMethods(StrEnum):
+    """HTTP Methods class."""
+
     GET = "GET"
     POST = "POST"
     PATCH = "PATCH"
     DELETE = "DELETE"
-
-
-class PatchAction(StrEnum):
-    """Enumerate patch actions."""
-
-    ADD = "add"
-    UPDATE = "update"
-    REMOVE = "remove"
 
 
 class SortMethod(StrEnum):
@@ -622,6 +616,8 @@ class FTCardholderCard:
 
 
 class PDFType(StrEnum):
+    """PDF types class."""
+
     STRING = "string"
     IMAGE = "image"
     STRENUM = "strEnum"

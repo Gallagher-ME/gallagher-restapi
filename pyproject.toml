@@ -30,7 +30,9 @@ ignore = [
 [tool.pylint."MESSAGES CONTROL"]
 disable = [
     "invalid-name", # N815
+    "line-too-long", # E501, disabled globally
     "too-many-arguments",
+    "too-many-lines",
     "too-many-instance-attributes",
     "too-many-public-methods",
     "too-many-branches", # PLR0912

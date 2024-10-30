@@ -1,4 +1,5 @@
 """Test getting the status of items."""
+
 import httpx
 import pytest
 
@@ -8,14 +9,15 @@ from . import CONFIG
 
 
 @pytest.mark.asyncio
-async def test_conn_successfull() -> None:
-    """Test successfull connection to server."""
+async def test_conn_successful() -> None:
+    """Test successful connection to server."""
 
     async with httpx.AsyncClient(verify=False) as httpx_client:
         gll_client = Client(
             host=CONFIG["host"],
             port=CONFIG["port"],
             api_key=CONFIG["api_key"],
+            cloud_gateway=CONFIG["cloud_gateway"],
             httpx_client=httpx_client,
         )
         await gll_client.initialize()
