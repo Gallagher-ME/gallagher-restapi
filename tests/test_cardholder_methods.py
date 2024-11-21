@@ -10,6 +10,7 @@ from gallagher_restapi.models import (
     FTItemReference,
     FTNewCardholder,
     PDFType,
+    SortMethod,
 )
 
 
@@ -23,7 +24,12 @@ async def test_get_cardholder_by_id(gll_client: Client) -> None:
 @pytest.mark.asyncio
 async def test_get_cardholder_by_name(gll_client: Client) -> None:
     """Test getting cardholder by name."""
-    cardholder = await gll_client.get_cardholder(name="Justin", top=1)
+    cardholder = await gll_client.get_cardholder(
+        name=None,
+        top=10,
+        sort=SortMethod.NAME_ASC,
+        extra_fields=["division", "personalDataFields"],
+    )
     assert len(cardholder) == 1
 
 
@@ -55,10 +61,9 @@ async def test_add_cardholder(gll_client: Client) -> None:
 async def test_update_cardholder(gll_client: Client) -> None:
     """Test updating a cardholder."""
     card_types = await gll_client.get_card_type()
-    test_cardholder = await gll_client.get_cardholder(id="681")
+    test_cardholder = await gll_client.get_cardholder(id="378")
     assert test_cardholder[0].division
-    updated_cardholder = FTNewCardholder()
-    updated_cardholder.patch(
+    updated_cardholder = FTNewCardholder.patch(
         add=[
             FTCardholderCard.create_card(
                 card_type_href=card_types[0].href,

@@ -1,4 +1,5 @@
 """Test Gallagher Events methods."""
+
 import pytest
 
 from gallagher_restapi.client import Client
@@ -31,18 +32,19 @@ async def test_get_new_events(gll_client: Client) -> None:
     assert next
 
 
-# @pytest.mark.asyncio
-# async def test_yield_new_events(gll_client: Client) -> None:
-#     """Test yielding events from Gallagher."""
-#     event_filter = EventFilter(
-#         top=1,
-#         previous=True,
-#         event_groups=[gll_client.event_groups["Card Event"]],
-#     )
-#     async for new_events in gll_client.yield_new_events(event_filter=event_filter):
-#         for event in new_events:
-#             assert event.message is not None
-#             break
+@pytest.mark.asyncio
+async def test_yield_new_events(gll_client: Client) -> None:
+    """Test yielding events from Gallagher."""
+    event_filter = EventFilter(
+        top=1,
+        previous=True,
+        event_groups=[gll_client.event_groups["Card Event"].id],
+    )
+    async for new_events in gll_client.yield_new_events(event_filter=event_filter):
+        for event in new_events:
+            assert event.message is not None
+            break
+        return
 
 
 @pytest.mark.asyncio

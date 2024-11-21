@@ -15,9 +15,9 @@ async def gll_client() -> AsyncGenerator[Any, Client]:
     async with httpx.AsyncClient(verify=False) as httpx_client:
         client = Client(
             CONFIG["api_key"],
-            cloud_gateway=CONFIG["cloud_gateway"],
-            # host=CONFIG["host"],
-            # port=CONFIG["port"],
+            cloud_gateway=CONFIG.get("cloud_gateway"),
+            host=CONFIG["host"],
+            port=CONFIG["port"],
             httpx_client=httpx_client,
         )
         await client.initialize()
