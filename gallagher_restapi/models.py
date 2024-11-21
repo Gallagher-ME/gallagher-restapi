@@ -826,8 +826,9 @@ class FTNewCardholder:
             _dict.update({f"@{name}": value for name, value in self.pdfs.items()})
         return json.loads(json.dumps(_dict, default=json_serializer))
 
+    @classmethod
     def patch(
-        self,
+        cls,
         add: list[FTCardholderCard | FTAccessGroupMembership | FTLockerMembership]
         | None = None,
         update: list[FTCardholderCard | FTAccessGroupMembership | FTLockerMembership]
@@ -835,8 +836,9 @@ class FTNewCardholder:
         remove: list[FTCardholderCard | FTAccessGroupMembership | FTLockerMembership]
         | None = None,
         **kwargs: Any,
-    ) -> None:
+    ) -> FTNewCardholder:
         """Return FTCardholder object from dict."""
+        _cls = FTNewCardholder()
         attr_class = {
             "FTCardholderCard": "cards",
             "FTAccessGroupMembership": "accessGroups",
@@ -846,24 +848,35 @@ class FTNewCardholder:
             for item in items or []:
                 if (item_type := type(item).__name__) not in attr_class:
                     continue
-                getattr(self, attr_class[item_type]).setdefault(action, []).append(item)
+                getattr(_cls, attr_class[item_type]).setdefault(action, []).append(item)
 
         for key, value in kwargs.items():
             try:
-                setattr(self, key, value)
+                setattr(_cls, key, value)
             except AttributeError:
                 continue
+        return _cls
 
 
 # endregion Cardholder models
 
 
 # region Alarm and event models
+
+
+class FTAlarmState(StrEnum):
+    """Alarm states."""
+
+    UNACKNOWLEDGED = "unacknowledged"
+    ACKNOWLEDGED = "acknowledged"
+    PROCESSED = "processed"
+
+
 @dataclass
-class FTAlarm:
+class FTEventAlarm:
     """FTAlarm summary class"""
 
-    state: str
+    state: FTAlarmState
     href: str = ""
 
 
@@ -906,23 +919,53 @@ class EventField:
 
 
 @dataclass
-class FTEvent:
-    """FTEvent summary class."""
+class FTEventBase:
+    """FTEventBase class."""
 
     href: str
     id: str
-    serverDisplayName: str | None
     time: datetime
     message: str
-    occurrences: int | None
-    priority: int
-    alarm: FTAlarm | None
-    operator: FTLinkItem | None
     source: FTItem
-    group: FTItemType
-    type: FTItemType
+    type: FTItemType | str
     eventType: FTItemType | None
+    priority: int
     division: FTItem | None
+
+
+@dataclass
+class FTAlarm(FTEventBase):
+    """FTAlarm class."""
+
+    state: FTAlarmState
+    active: bool
+    event: FTItemReference | None
+    notePresets: list[str] | None
+    view: FTItemReference
+    comment: FTItemReference
+    acknowledge: FTItemReference | None
+    acknowledgeWithComment: FTItemReference | None
+    process: FTItemReference | None
+    processWithComment: FTItemReference | None
+    forceProcess: FTItemReference | None
+
+    @classmethod
+    def from_dict(cls, kwargs: dict[str, Any]) -> FTAlarm:
+        """Return FTAlarm object from dict."""
+        return from_dict(
+            FTAlarm, kwargs, config=Config(cast=[FTAlarmState], type_hooks=CONVERTERS)
+        )
+
+
+@dataclass
+class FTEvent(FTEventBase):
+    """FTEvent class."""
+
+    serverDisplayName: str | None
+    occurrences: int | None
+    alarm: FTEventAlarm | None
+    operator: FTLinkItem | None
+    group: FTItemType
     cardholder: FTCardholder | None
     entryAccessZone: FTItem | None
     exitAccessZone: FTItem | None
@@ -938,7 +981,9 @@ class FTEvent:
     @classmethod
     def from_dict(cls, kwargs: dict[str, Any]) -> FTEvent:
         """Return FTEvent object from dict."""
-        return from_dict(FTEvent, kwargs, config=Config(type_hooks=CONVERTERS))
+        return from_dict(
+            FTEvent, kwargs, config=Config(cast=[FTAlarmState], type_hooks=CONVERTERS)
+        )
 
 
 @dataclass

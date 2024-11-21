@@ -17,6 +17,7 @@ from .models import (
     EventPost,
     FTAccessGroup,
     FTAccessZone,
+    FTAlarm,
     FTAlarmZone,
     FTApiFeatures,
     FTCardholder,
@@ -830,6 +831,44 @@ class Client:
         return None
 
     # endregion Event methods
+
+    # region Alarm methods
+
+    async def get_alarms(self, extra_fields: list[str] | None = None) -> list[FTAlarm]:
+        """Return list of alarms."""
+        alarms: list[FTAlarm] = []
+        if response := await self._async_request(
+            HTTPMethods.GET, self.api_features.href("alarms"), extra_fields=extra_fields
+        ):
+            alarms = [FTAlarm.from_dict(alarm) for alarm in response["alarms"]]
+        return alarms
+
+    async def yield_new_alarms(
+        self, extra_fields: list[str] | None = None
+    ) -> AsyncIterator[list[FTAlarm]]:
+        """Yield a list of new alarms."""
+        response = await self._async_request(
+            HTTPMethods.GET,
+            self.api_features.href("alarms/updates"),
+            extra_fields=extra_fields,
+        )
+        while True:
+            _LOGGER.debug(response)
+            yield [FTAlarm.from_dict(alarm) for alarm in response["updates"]]
+            await asyncio.sleep(1)
+            response = await self._async_request(
+                HTTPMethods.GET, response["next"]["href"], extra_fields=extra_fields
+            )
+
+    async def alarm_action(self, action: FTItemReference, comment: str | None) -> None:
+        """post an alarm action (with optional comment)."""
+        await self._async_request(
+            HTTPMethods.POST,
+            action.href,
+            data={"comment": comment} if comment else None,
+        )
+
+    # endregion Alarm methods
 
     # region Status and override methods
     async def get_item_status(
