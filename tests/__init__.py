@@ -3,7 +3,7 @@
 from os import environ
 from typing import Any
 
-from gallagher_restapi.client import CloudGateway
+from gallagher_restapi import CloudGateway
 
 cloud_gateway = None
 if connection := environ.get("CLOUD_GATEWAY"):

@@ -1,7 +1,8 @@
 """Test Gallagher Fence zones methods."""
+
 import pytest
 
-from gallagher_restapi.client import Client
+from gallagher_restapi import Client
 
 
 @pytest.mark.asyncio

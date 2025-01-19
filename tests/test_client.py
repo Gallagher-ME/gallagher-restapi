@@ -3,7 +3,8 @@
 import httpx
 import pytest
 
-from gallagher_restapi import Client, UnauthorizedError, LicenseError
+from gallagher_restapi import Client
+from gallagher_restapi.exceptions import LicenseError, UnauthorizedError
 
 from . import CONFIG
 

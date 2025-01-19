@@ -4,8 +4,9 @@ from datetime import datetime
 from unittest.mock import patch
 import pytest
 
-from gallagher_restapi.client import Client
+from gallagher_restapi import Client
 from gallagher_restapi.models import (
+    FTAccessGroupMembership,
     FTCardholderCard,
     FTItemReference,
     FTNewCardholder,
@@ -63,6 +64,7 @@ async def test_update_cardholder(gll_client: Client) -> None:
     card_types = await gll_client.get_card_type()
     test_cardholder = await gll_client.get_cardholder(id="378")
     assert test_cardholder[0].division
+    assert isinstance(test_cardholder[0].accessGroups, list)
     updated_cardholder = FTNewCardholder.patch(
         add=[
             FTCardholderCard.create_card(

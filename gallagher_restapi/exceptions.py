@@ -1,4 +1,4 @@
-"""The exceptions raised by the api."""
+"""Exceptions raised by the api."""
 
 
 class GllApiError(Exception):

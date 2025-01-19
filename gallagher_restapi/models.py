@@ -16,6 +16,8 @@ from gallagher_restapi.exceptions import LicenseError
 
 T = TypeVar("T")
 
+MOVEMENT_EVENT_TYPES = ["20001", "20002", "20003", "20047", "20107", "42415"]
+
 
 class HTTPMethods(StrEnum):
     """HTTP Methods class."""
