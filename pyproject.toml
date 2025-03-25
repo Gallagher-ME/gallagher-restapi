@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "gallagher-restapi"
-version = "1.1.4"
+version = "1.1.5"
 description = "Python library for Gallagher REST API"
 authors = ["Rami Mousleh <engrbm87@gmail.com>"]
 packages = [{ include = "gallagher_restapi" }]
