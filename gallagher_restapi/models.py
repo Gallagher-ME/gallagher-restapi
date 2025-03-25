@@ -1279,6 +1279,7 @@ CONVERTERS: dict[Any, Callable[[Any], Any]] = {
     FTDoorCommands: lambda x: verify_commands(FTDoorCommands, x),
     FTInputCommands: lambda x: verify_commands(FTInputCommands, x),
     FTOutputCommands: lambda x: verify_commands(FTOutputCommands, x),
+    FTFenceZoneCommands: lambda x: verify_commands(FTFenceZoneCommands, x),
     FTCardholder: FTCardholder.from_dict,
     list[dict[str, FTCardholderPdfValue]]: FTCardholderPdfValue.from_dict,
     list[FTCardholderCard]: FTCardholderCard.from_dict,
