@@ -35,6 +35,20 @@ async def test_get_cardholder_by_name(gll_client: Client) -> None:
 
 
 @pytest.mark.asyncio
+async def test_yield_cardholders(gll_client: Client) -> None:
+    """Test yielding cardholders."""
+    all_cardholders = []
+    async for cardholders in gll_client.yield_cardholders(
+        top=5,
+        sort=SortMethod.NAME_ASC,
+        extra_fields=["division", "personalDataFields"],
+    ):
+        assert len(cardholders) <= 5
+        all_cardholders.extend(cardholders)
+    assert len(all_cardholders) > 5
+
+
+@pytest.mark.asyncio
 async def test_get_cardholder_by_pdf_value(gll_client: Client) -> None:
     """Test getting cardholder by pdf value."""
     cardholder = await gll_client.get_cardholder(pdfs={"Email": "newemail@mail.com"})

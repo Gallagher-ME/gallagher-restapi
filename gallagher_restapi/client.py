@@ -131,7 +131,7 @@ class Client:
         )
         try:
             response = await self.httpx_client.request(
-                method, endpoint, params=params, json=data
+                method, endpoint, params=params or None, json=data
             )
         except (httpx.RequestError, SSLError) as err:
             raise ConnectError(
@@ -672,6 +672,38 @@ class Client:
             return base64.b64encode(response["results"]).decode("utf-8")
         return None
 
+    async def _search_cardholders(
+        self,
+        *,
+        name: str | None = None,
+        pdfs: dict[str, str] | None = None,
+        extra_fields: list[str] | None = None,
+        division: list[str] | None = None,
+        sort: SortMethod | None = None,
+        top: int | None = None,
+    ) -> dict[str, Any]:
+        """Fetch cardholders from the server."""
+        params: dict[str, str] = {}
+        if pdfs:
+            for pdf_name, value in pdfs.items():
+                if not (pdf_name.startswith('"') and pdf_name.endswith('"')):
+                    pdf_name = f'"{pdf_name}"'
+                # if pdf name is correct the result should include one item only
+                if not (pdf_field := await self.get_personal_data_field(name=pdf_name)):
+                    raise GllApiError(f"pdf field: {pdf_name} not found")
+                params.update({f"pdf_{pdf_field[0].id}": value})
+
+        return await self._async_request(
+            HTTPMethods.GET,
+            self.api_features.href("cardholders"),
+            params=params,
+            name=name,
+            extra_fields=extra_fields,
+            division=division,
+            sort=sort,
+            top=top,
+        )
+
     async def get_cardholder(
         self,
         *,
@@ -684,41 +716,55 @@ class Client:
         top: int | None = None,
     ) -> list[FTCardholder]:
         """Return list of cardholders."""
-        cardholders: list[FTCardholder] = []
         if id:
             if response := await self._async_request(
                 HTTPMethods.GET,
                 f"{self.api_features.href('cardholders')}/{id}",
                 extra_fields=extra_fields,
             ):
-                cardholders = [FTCardholder.from_dict(response)]
-        else:
-            params: dict[str, str] = {}
-            if pdfs:
-                for pdf_name, value in pdfs.items():
-                    if not (pdf_name.startswith('"') and pdf_name.endswith('"')):
-                        pdf_name = f'"{pdf_name}"'
-                    # if pdf name is correct the result should include one item only
-                    if not (
-                        pdf_field := await self.get_personal_data_field(name=pdf_name)
-                    ):
-                        raise GllApiError(f"pdf field: {pdf_name} not found")
-                    params.update({f"pdf_{pdf_field[0].id}": value})
+                return [FTCardholder.from_dict(response)]
 
-            response = await self._async_request(
-                HTTPMethods.GET,
-                self.api_features.href("cardholders"),
-                params=params,
-                name=name,
-                extra_fields=extra_fields,
-                division=division,
-                sort=sort,
-                top=top,
-            )
-            cardholders = [
+        response = await self._search_cardholders(
+            name=name,
+            pdfs=pdfs,
+            extra_fields=extra_fields,
+            division=division,
+            sort=sort,
+            top=top,
+        )
+        _LOGGER.debug(response)
+        return [
+            FTCardholder.from_dict(cardholder) for cardholder in response["results"]
+        ]
+
+    async def yield_cardholders(
+        self,
+        *,
+        name: str | None = None,
+        pdfs: dict[str, str] | None = None,
+        extra_fields: list[str] | None = None,
+        division: list[str] | None = None,
+        sort: SortMethod | None = None,
+        top: int | None = None,
+    ) -> AsyncIterator[list[FTCardholder]]:
+        """Return Async iterator list of cardholders."""
+        response = await self._search_cardholders(
+            name=name,
+            pdfs=pdfs,
+            extra_fields=extra_fields,
+            division=division,
+            sort=sort,
+            top=top or 100,
+        )
+        while True:
+            _LOGGER.debug(response)
+            yield [
                 FTCardholder.from_dict(cardholder) for cardholder in response["results"]
             ]
-        return cardholders
+            await asyncio.sleep(1)
+            if not (next_link := response.get("next")):
+                break
+            response = await self._async_request(HTTPMethods.GET, next_link["href"])
 
     async def add_cardholder(self, cardholder: FTNewCardholder) -> FTItemReference:
         """Add a new cardholder in Gallagher."""
