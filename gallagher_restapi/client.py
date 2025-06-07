@@ -13,6 +13,7 @@ import httpx
 
 from .exceptions import ConnectError, GllApiError, RequestError, UnauthorizedError
 from .models import (
+    CardholderChange,
     EventFilter,
     EventPost,
     FTAccessGroup,
@@ -765,6 +766,41 @@ class Client:
             if not (next_link := response.get("next")):
                 break
             response = await self._async_request(HTTPMethods.GET, next_link["href"])
+
+    async def get_cardholder_changes(self, href) -> tuple[list[CardholderChange], str]:
+        """Return list of cardholder changes."""
+        response = await self._async_request(HTTPMethods.GET, href)
+        changes = [CardholderChange.from_dict(change) for change in response["results"]]
+        return changes, response["next"]["href"]
+
+    async def get_cardholder_changes_href(
+        self,
+        *,
+        top: int | None = None,
+        filter: list[str] | None = None,
+        cardholder_fields: list[str] | None = None,
+        extra_fields: list[str] | None = None,
+    ) -> str:
+        """Return the next href to get cardholder changes."""
+        params: dict[str, Any] = {}
+        if top:
+            params["top"] = top
+        if filter:
+            params["filter"] = ",".join(filter)
+        if cardholder_fields:
+            params["fields"] = ",".join(
+                f"cardholder.{field}" for field in cardholder_fields
+            )
+        if extra_fields:
+            fields = params.setdefault("fields", "")
+            params["fields"] = f"{fields},{','.join(extra_fields)}"
+
+        response = await self._async_request(
+            HTTPMethods.GET,
+            self.api_features.href("cardholders/changes"),
+            params=params or None,
+        )
+        return response["next"]["href"]
 
     async def add_cardholder(self, cardholder: FTNewCardholder) -> FTItemReference:
         """Add a new cardholder in Gallagher."""

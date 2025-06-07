@@ -759,6 +759,7 @@ class FTCardholder:
     authorised: bool = False
     operatorLoginEnabled: bool = False
     operatorPasswordExpired: bool = False
+    useExtendedAccessTime: bool = False
     windowsLoginEnabled: bool = False
 
     def as_dict(self) -> dict[str, Any]:
@@ -858,6 +859,35 @@ class FTNewCardholder:
             except AttributeError:
                 continue
         return _cls
+
+
+class CardholderChangeType(StrEnum):
+    """Cardholder change types."""
+
+    ADD = "add"
+    UPDATE = "update"
+    REMOVE = "remove"
+
+
+@dataclass
+class CardholderChange:
+    """Cardholder changes object class."""
+
+    time: datetime | None
+    type: CardholderChangeType | None
+    item: FTItemReference | None
+    oldValues: dict[str, Any] | None
+    newValues: dict[str, Any] | None
+    cardholder: FTNewCardholder | None
+
+    @classmethod
+    def from_dict(cls, kwargs: dict[str, Any]) -> CardholderChange:
+        """Return list of cardholder changes object from json."""
+        return from_dict(
+            CardholderChange,
+            kwargs,
+            config=Config(cast=[CardholderChangeType], type_hooks=CONVERTERS),
+        )
 
 
 # endregion Cardholder models
