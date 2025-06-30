@@ -686,13 +686,13 @@ class Client:
         """Fetch cardholders from the server."""
         params: dict[str, str] = {}
         if pdfs:
-            for pdf_name, value in pdfs.items():
-                if not (pdf_name.startswith('"') and pdf_name.endswith('"')):
-                    pdf_name = f'"{pdf_name}"'
-                # if pdf name is correct the result should include one item only
-                if not (pdf_field := await self.get_personal_data_field(name=pdf_name)):
-                    raise GllApiError(f"pdf field: {pdf_name} not found")
-                params.update({f"pdf_{pdf_field[0].id}": value})
+            for pdf, value in pdfs.items():
+                if not pdf.isdigit():
+                    if not (pdf_field := await self.get_personal_data_field(name=pdf)):
+                        raise GllApiError(f"pdf field: {pdf} not found")
+                    # if pdf name is correct the result should include one item only
+                    pdf = pdf_field[0].id
+                params.update({f"pdf_{pdf}": value})
 
         return await self._async_request(
             HTTPMethods.GET,
