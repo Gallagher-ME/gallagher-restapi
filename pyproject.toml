@@ -8,14 +8,14 @@ packages = [{ include = "gallagher_restapi" }]
 [tool.poetry.dependencies]
 python = "^3.11"
 httpx = "^0.28.1"
-pytz = "^2024.2.0"
-dacite = "^1.8.1"
+pytz = "^2025.2.0"
+dacite = "^1.9.2"
 
 
 [tool.poetry.group.dev.dependencies]
-types-pytz = "^2024.2.0"
-pytest = "8.3.4"
-pytest-asyncio = "^0.25.2"
+types-pytz = "^2025.2.0"
+pytest = "8.4.1"
+pytest-asyncio = "^1.0.0"
 
 [build-system]
 requires = ["poetry-core"]
