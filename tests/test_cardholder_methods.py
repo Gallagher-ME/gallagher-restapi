@@ -127,3 +127,13 @@ async def test_get_image_from_pdf(gll_client: Client) -> None:
                 assert isinstance(pdf_info.value, FTItemReference)
                 image = await gll_client.get_image_from_pdf(pdf_info.value)
                 assert image is not None
+
+
+@pytest.mark.asyncio
+async def test_get_cardholder_changes(gll_client: Client) -> None:
+    """Test getting cardholder changes."""
+    changes_href = await gll_client.get_cardholder_changes_href(
+        extra_fields=["defaults"], cardholder_fields=["cards"]
+    )
+    changes, next_link = await gll_client.get_cardholder_changes(href=changes_href)
+    assert len(changes) > 0
