@@ -723,8 +723,8 @@ class FTCardholderPdfValue:
 class FTCardholder:
     """FTCardholder details class."""
 
-    href: str
-    id: str
+    href: str | None
+    id: str | None
     division: FTItemReference | None
     name: str | None
     firstName: str | None
@@ -878,7 +878,7 @@ class CardholderChange:
     item: FTItemReference | None
     oldValues: dict[str, Any] | None
     newValues: dict[str, Any] | None
-    cardholder: FTNewCardholder | None
+    cardholder: FTCardholder | None
 
     @classmethod
     def from_dict(cls, kwargs: dict[str, Any]) -> CardholderChange:
