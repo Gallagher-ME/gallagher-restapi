@@ -11,6 +11,7 @@ from typing import Any, Type, TypeVar
 
 import pytz
 from dacite import Config, from_dict
+from pydantic import BaseModel, Field, model_validator
 
 from gallagher_restapi.exceptions import LicenseError
 
@@ -37,62 +38,83 @@ class SortMethod(StrEnum):
     NAME_DSC = "-name"
 
 
-@dataclass
-class FTApiFeatures:
+class FeatureDetail(BaseModel):
+    """A detail of a feature, usually just an href"""
+
+    href: str
+
+
+class Feature:
+    """
+    A wrapper around a dictionary of feature details.
+    """
+
+    def __init__(self, name: str, features: dict[str, Any]) -> None:
+        self._name = name
+        self._features = features
+
+    def href(self, sub_feature: str | None = None) -> str:
+        """
+        Return href for a sub_feature. If no sub_feature is provided,
+        the href for the feature itself is returned.
+        """
+        if not self._features:
+            raise LicenseError(f"Feature '{self._name}' is not licensed.")
+
+        lookup_key = sub_feature or self._name
+
+        if not (detail := self._features.get(lookup_key)):
+            raise ValueError(
+                f"'{lookup_key}' is not a valid sub-feature of '{self._name}'"
+            )
+        return detail["href"]
+
+
+class FTApiFeatures(BaseModel):
     """FTApiFeatures class."""
 
-    accessGroups: dict[str, Any] | None
-    accessZones: dict[str, Any] | None
-    alarms: dict[str, Any] | None
-    alarmZones: dict[str, Any] | None
-    cardholders: dict[str, Any] | None
-    cardTypes: dict[str, Any] | None
-    competencies: dict[str, Any] | None
-    dayCategories: dict[str, Any] | None
-    divisions: dict[str, Any] | None
-    doors: dict[str, Any] | None
-    elevators: dict[str, Any] | None
-    events: dict[str, Any] | None
-    fenceZones: dict[str, Any] | None
-    inputs: dict[str, Any] | None
-    interlockGroups: dict[str, Any] | None
-    items: dict[str, Any] | None
-    lockerBanks: dict[str, Any] | None
-    macros: dict[str, Any] | None
-    operatorGroups: dict[str, Any] | None
-    outputs: dict[str, Any] | None
-    personalDataFields: dict[str, Any] | None
-    receptions: dict[str, Any] | None
-    roles: dict[str, Any] | None
-    schedules: dict[str, Any] | None
-    visits: dict[str, Any] | None
-    lockers: dict[str, Any] | None
+    model_config = {"arbitrary_types_allowed": True}
 
-    def href(self, feature: str) -> str:
-        """
-        Return href link for feature.
-        For sub_features use format main_feature/sub_feature
-        """
-        main_feature = sub_feature = ""
-        try:
-            if "/" in feature:
-                main_feature, sub_feature = feature.split("/")
-            else:
-                main_feature = feature
-        except ValueError as err:
-            raise ValueError("Incorrect syntax of feature.") from err
-        if not hasattr(self, main_feature):
-            raise ValueError(f"{main_feature} is not a valid feature")
-        if not (feature := getattr(self, main_feature)):
-            raise LicenseError(f"{main_feature} is not licensed for this site.")
-        if sub_feature and sub_feature not in feature:
-            raise ValueError(f"{sub_feature} is not found in {main_feature}")
-        return feature[sub_feature or main_feature]["href"]
+    access_group: Feature = Field(alias="accessGroups")
+    access_zones: Feature = Field(alias="accessZones")
+    alarms: Feature = Field(alias="alarms")
+    alarm_zones: Feature = Field(alias="alarmZones")
+    cardholders: Feature = Field(alias="cardholders")
+    card_types: Feature = Field(alias="cardTypes")
+    competencies: Feature = Field(alias="competencies")
+    day_categories: Feature = Field(alias="dayCategories")
+    divisions: Feature = Field(alias="divisions")
+    doors: Feature = Field(alias="doors")
+    elevators: Feature = Field(alias="elevators")
+    events: Feature = Field(alias="events")
+    fence_zones: Feature = Field(alias="fenceZones")
+    inputs: Feature = Field(alias="inputs")
+    interlock_groups: Feature = Field(alias="interlockGroups")
+    items: Feature = Field(alias="items")
+    locker_banks: Feature = Field(alias="lockerBanks")
+    macros: Feature = Field(alias="macros")
+    operator_groups: Feature = Field(alias="operatorGroups")
+    outputs: Feature = Field(alias="outputs")
+    personal_data_fields: Feature = Field(alias="personalDataFields")
+    receptions: Feature = Field(alias="receptions")
+    roles: Feature = Field(alias="roles")
+    schedules: Feature = Field(alias="schedules")
+    visits: Feature = Field(alias="visits")
+    lockers: Feature = Field(alias="lockers")
 
+    @model_validator(mode="before")
     @classmethod
-    def from_dict(cls, kwargs: dict[str, Any]) -> FTApiFeatures:
-        """Return FTApiFeatures object from dict."""
-        return from_dict(data_class=FTApiFeatures, data=kwargs)
+    def _wrap_features(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """
+        Convert each feature dict in values to a Feature instance.
+        """
+        wrapped_values = {}
+        # Use cls.model_fields to iterate over all declared fields
+        for field_name, field_info in cls.model_fields.items():
+            # Pydantic uses alias for mapping, so we should too.
+            alias = field_info.alias or field_name
+            wrapped_values[alias] = Feature(alias, values.get(alias, {}))
+        return wrapped_values
 
 
 @dataclass
