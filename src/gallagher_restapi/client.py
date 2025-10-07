@@ -923,6 +923,15 @@ class Client:
             HTTPMethods.GET, self.api_features.href("alarms"), extra_fields=extra_fields
         ):
             alarms = [FTAlarm.from_dict(alarm) for alarm in response["alarms"]]
+            while "next" in response:
+                if response2 := await self._async_request(
+                    HTTPMethods.GET,
+                    response["next"]["href"],
+                    extra_fields=extra_fields,
+                ):
+                    alarms.extend(
+                        FTAlarm.from_dict(alarm) for alarm in response2["alarms"]
+                    )
         return alarms
 
     async def yield_new_alarms(
