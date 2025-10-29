@@ -6,10 +6,9 @@ import pytest
 
 from gallagher_restapi import Client
 from gallagher_restapi.models import (
-    FTAccessGroupMembership,
+    FTCardholder,
     FTCardholderCard,
     FTItemReference,
-    FTNewCardholder,
     PDFType,
     SortMethod,
 )
@@ -25,13 +24,15 @@ async def test_get_cardholder_by_id(gll_client: Client) -> None:
 @pytest.mark.asyncio
 async def test_get_cardholder_by_name(gll_client: Client) -> None:
     """Test getting cardholder by name."""
-    cardholder = await gll_client.get_cardholder(
-        name=None,
+    cardholders = await gll_client.get_cardholder(
+        name="Rami",
         top=10,
         sort=SortMethod.NAME_ASC,
         extra_fields=["division", "personalDataFields"],
     )
-    assert len(cardholder) == 1
+    assert len(cardholders) > 0
+    cardholder = await gll_client.get_cardholder(id=cardholders[0].id)
+    assert cardholder[0].cards
 
 
 @pytest.mark.asyncio
@@ -62,14 +63,14 @@ async def test_add_cardholder(gll_client: Client) -> None:
         "gallagher_restapi.Client._async_request",
         return_value={"location": "https://location"},
     ):
-        cardholder = FTNewCardholder(
+        cardholder = FTCardholder(
             division=FTItemReference(href="https://division-href"),
-            firstName="John",
-            lastName="Doe",
+            first_name="John",
+            last_name="Doe",
         )
         new_cardholder_href = await gll_client.add_cardholder(cardholder)
 
-    assert new_cardholder_href.href == "https://location"
+        assert new_cardholder_href.href == "https://location"
 
 
 @pytest.mark.asyncio
@@ -78,17 +79,18 @@ async def test_update_cardholder(gll_client: Client) -> None:
     card_types = await gll_client.get_card_type()
     test_cardholder = await gll_client.get_cardholder(id="378")
     assert test_cardholder[0].division
-    assert isinstance(test_cardholder[0].accessGroups, list)
-    updated_cardholder = FTNewCardholder.patch(
+    assert isinstance(test_cardholder[0].access_groups, list)
+    updated_cardholder = FTCardholder.patch(
         add=[
-            FTCardholderCard.create_card(
-                card_type_href=card_types[0].href,
+            FTCardholderCard(
+                type=FTItemReference(href=card_types[0].href),
                 number="4",
                 active_from=datetime(2024, 2, 10),
             )
         ],
-        remove=test_cardholder[0].accessGroups,
+        remove=test_cardholder[0].access_groups,
     )
+    assert test_cardholder[0].href
     await gll_client.update_cardholder(test_cardholder[0].href, updated_cardholder)
 
 

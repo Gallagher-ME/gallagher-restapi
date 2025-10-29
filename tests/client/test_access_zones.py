@@ -23,7 +23,7 @@ async def test_override_access_zone(gll_client: Client) -> None:
     """Test overriding an access zone item."""
     access_zones = await gll_client.get_access_zone()
     if access_zones:
-        access_zone = await gll_client.get_access_zone(id=access_zones[0].id)
+        access_zone = await gll_client.get_access_zone(id=access_zones[1].id)
         assert access_zone[0].name is not None
         assert access_zone[0].commands
         assert access_zone[0].commands.secure

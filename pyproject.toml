@@ -7,16 +7,21 @@ requires-python = ">=3.11,<4.0"
 license = "MIT"
 dependencies = [
     # Runtime deps (converted from Poetry caret constraints)
-    "httpx>=0.28.1,<0.29",
-    "pytz>=2025.2.0,<2026.0.0",
-    "dacite>=1.9.2,<2.0.0",
+    "httpx==0.28.1",
+    "pytz==2025.2",
+    "pydantic==2.12.3",
+    "pydantic-ai==1.7.0",
 ]
 
 [dependency-groups]
 dev = [
     "types-pytz>=2025.2.0,<2026.0.0",
-    "pytest==8.4.1",
+    "pytest==8.4.2",
+    "pytest-cov==7.0.0",
     "pytest-asyncio>=1.0.0,<2.0.0",
+    "mypy>=1.18.2",
+    "google-genai==1.46.0",
+    "respx==0.22.0",
 ]
 
 [build-system]
@@ -27,6 +32,10 @@ build-backend = "uv_build"
 ignore = [
     "E731", # do not assign a lambda expression, use a def
 ]
+
+[tool.pylint.MAIN]
+py-version = "3.13"
+load-plugins = ["pylint.extensions.code_style", "pylint.extensions.typing"]
 
 [tool.pylint."MESSAGES CONTROL"]
 disable = [
@@ -40,4 +49,13 @@ disable = [
     "too-many-branches",             # PLR0912
     "redefined-builtin",             # A001
     "protected-access",              # SLF001
+    "no-member",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = [".git", "testing_config"]
+log_format = "%(asctime)s.%(msecs)03d %(levelname)-8s %(threadName)s %(name)s:%(filename)s:%(lineno)s %(message)s"
+log_date_format = "%Y-%m-%d %H:%M:%S"
+asyncio_debug = true
+asyncio_mode = "auto"
