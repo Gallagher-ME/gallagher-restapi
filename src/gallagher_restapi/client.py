@@ -3,45 +3,17 @@
 import asyncio
 import base64
 import logging
-from datetime import datetime
+from collections.abc import AsyncGenerator
+from datetime import datetime, timedelta, timezone
 from enum import StrEnum
 from json import JSONDecodeError
 from ssl import SSLError
-from typing import Any, AsyncIterator, cast
+from typing import Any, cast
 
 import httpx
 
+from . import models
 from .exceptions import ConnectError, GllApiError, RequestError, UnauthorizedError
-from .models import (
-    CardholderChange,
-    EventFilter,
-    EventPost,
-    FTAccessGroup,
-    FTAccessZone,
-    FTAlarm,
-    FTAlarmZone,
-    FTApiFeatures,
-    FTCardholder,
-    FTCardType,
-    FTDoor,
-    FTEvent,
-    FTEventGroup,
-    FTFenceZone,
-    FTInput,
-    FTItem,
-    FTItemReference,
-    FTItemStatus,
-    FTLinkItem,
-    FTLocker,
-    FTLockerBank,
-    FTNewCardholder,
-    FTOperatorGroup,
-    FTOperatorGroupMembership,
-    FTOutput,
-    FTPersonalDataFieldDefinition,
-    HTTPMethods,
-    SortMethod,
-)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -53,6 +25,7 @@ class CloudGateway(StrEnum):
     US_GATEWAY = "commandcentre-api-us.security.gallagher.cloud"
 
 
+# TODO: Add wraper that checks the version and raises error if the method is not supported
 class Client:
     """Gallagher REST api base client."""
 
@@ -66,7 +39,16 @@ class Client:
         token: str | None = None,
         httpx_client: httpx.AsyncClient | None = None,
     ) -> None:
-        """Initialize REST api client."""
+        """Initialize REST api client.
+
+        Args:
+            api_key: Gallagher API key.
+            host: Gallagher server host.
+            port: Gallagher server port.
+            cloud_gateway: Use cloud gateway instead of direct host/port connection.
+            token: Integration license token.
+            httpx_client: Custom httpx AsyncClient instance.
+        """
         if cloud_gateway is not None:
             host = cloud_gateway.value
             port = 443
@@ -83,56 +65,44 @@ class Client:
         if token:
             self.httpx_client.headers["IntegrationLicense"] = token
         self.httpx_client.timeout.read = 60
-        self.api_features: FTApiFeatures = None  # type: ignore[assignment]
+        self.api_features: models.FTApiFeatures = None  # type: ignore[assignment]
         self._item_types: dict[str, str] = {}
-        self.event_groups: dict[str, FTEventGroup] = {}
-        self.event_types: dict[str, FTItem] = {}
+        self.event_groups: dict[str, models.FTEventGroup] = {}
+        self.event_types: dict[str, models.FTEventType] = {}
         self.version: str | None = None
 
     async def _async_request(
         self,
-        method: str,
+        method: models.HTTPMethods,
         endpoint: str,
         *,
-        data: dict[str, Any] | None = None,
-        params: dict[str, Any] | None = None,
-        extra_fields: list[str] | None = None,
-        name: str | None = None,
-        description: str | None = None,
-        division: list[str] | None = None,
-        sort: SortMethod | None = None,
-        top: int | None = None,
+        params: models.QueryBase | None = None,
+        data: models.FTModel | None = None,
     ) -> dict[str, Any]:
-        """Send a http request and return the response."""
-        params = params or {}
-        if extra_fields:
-            if "defaults" not in extra_fields:
-                extra_fields.append("defaults")
-            params["fields"] = ",".join(extra_fields)
-        params.update(
-            {
-                key: value
-                for key, value in {
-                    "division": ",".join(division) if division else None,
-                    "name": name,
-                    "description": description,
-                    "sort": sort,
-                    "top": top,
-                }.items()
-                if value is not None
-            }
-        )
+        """Send a http request and return the response.
 
+        Args:
+            method: HTTP method (GET, POST, etc.)
+            endpoint: Full URL of the endpoint.
+            params: Query parameters as a Pydantic model.
+            data: Request body as a Pydantic model.
+
+        Returns:
+            The response as a dictionary.
+        """
         _LOGGER.debug(
             "Sending %s request to endpoint: %s, data: %s, params: %s",
             method,
             endpoint,
-            data,
-            params,
+            data.model_dump() if data else None,
+            params.model_dump() if params else None,
         )
         try:
             response = await self.httpx_client.request(
-                method, endpoint, params=params or None, json=data
+                method,
+                endpoint,
+                params=params.model_dump() if params else None,
+                json=data.model_dump() if data else None,
             )
         except (httpx.RequestError, SSLError) as err:
             raise ConnectError(
@@ -170,17 +140,21 @@ class Client:
         return {"results": response.content}
 
     async def initialize(self) -> None:
-        """Connect to Server and initialize data."""
-        response = await self._async_request(HTTPMethods.GET, f"{self.server_url}/api/")
-        self.api_features = FTApiFeatures.from_dict(response["features"])
-        self.version = response["version"]
-        await self._update_item_types()
-        await self._update_event_types()
-
-    async def _update_item_types(self) -> None:
-        """Get FTItem types."""
+        """Connect to Server and construct the api features."""
         response = await self._async_request(
-            HTTPMethods.GET, self.api_features.href("items/itemTypes")
+            models.HTTPMethods.GET, f"{self.server_url}/api/"
+        )
+        self.api_features = models.FTApiFeatures.model_validate(response["features"])
+        self.version = response["version"]
+
+    async def get_item_types(self) -> dict[str, str]:
+        """Fetch item types from server.
+
+        Returns:
+            A dict mapping item type names to their IDs.
+        """
+        response = await self._async_request(
+            models.HTTPMethods.GET, self.api_features.items("itemTypes")
         )
         if response.get("itemTypes"):
             self._item_types = {
@@ -188,6 +162,7 @@ class Client:
                 for item_type in response["itemTypes"]
                 if item_type["name"]
             }
+        return self._item_types
 
     async def get_item(
         self,
@@ -195,39 +170,59 @@ class Client:
         id: str | None = None,
         item_types: list[str] | None = None,
         name: str | None = None,
-        extra_fields: list[str] | None = None,
+        response_fields: list[str] | None = None,
         division: list[str] | None = None,
-        sort: SortMethod | None = None,
+        sort: models.SortMethod | None = None,
         top: int | None = None,
-    ) -> list[FTItem]:
-        """Get FTItems filtered by type and name."""
-        items: list[FTItem] = []
-        if id:
-            if response := await self._async_request(
-                HTTPMethods.GET,
-                f"{self.api_features.href('items')}/{id}",
-                extra_fields=extra_fields,
-            ):
-                items = [FTItem.from_dict(response)]
+    ) -> list[models.FTItem]:
+        """Retrieve items that don't have a dedicated method.
 
-        else:
+        Args:
+            id: If provided, fetch a single item by ID.
+            item_types: Filter by item type names; unknown types raise a ValueError.
+                The names can be fetched using get_item_types().
+            name: Filter by item name (substring match).
+            response_fields:
+                Specify the exact fields to include in the response.
+                If you need the default fields to be included along with other requested fields, pass ['defaults']
+                Additional fields that should be explicitly requested include ['statusFlags']
+            division: Filter by division IDs.
+                To get the list of divisions call this method with item_types=['Division'].
+            sort: Sort the order of the results.
+            top: Maximum number of results to return.
+
+        Returns:
+            A list of FTItem instances matching the filters.
+        """
+        if id:
+            response = await self._async_request(
+                models.HTTPMethods.GET,
+                f"{self.api_features.items()}/{id}",
+                params=models.ItemQuery(response_fields=response_fields),
+            )
+            return [models.FTItem.model_validate(response)]
+
+        if item_types:
+            if not self._item_types:
+                await self.get_item_types()
             type_ids: list[str] = []
             for item_type in item_types or []:
                 if (type_id := self._item_types.get(item_type)) is None:
                     raise ValueError(f"Unknown item type: {item_type}")
                 type_ids.append(type_id)
-            response = await self._async_request(
-                HTTPMethods.GET,
-                self.api_features.href("items"),
-                params={"type": ",".join(type_ids)},
-                extra_fields=extra_fields,
+        response = await self._async_request(
+            models.HTTPMethods.GET,
+            self.api_features.items(),
+            params=models.ItemQuery(
                 name=name,
+                item_types=type_ids,
                 division=division,
+                response_fields=response_fields,
                 sort=sort,
                 top=top,
-            )
-            items = [FTItem.from_dict(item) for item in response["results"]]
-        return items
+            ),
+        )
+        return [models.FTItem.model_validate(item) for item in response["results"]]
 
     # region Access zone methods
     async def get_access_zone(
@@ -236,53 +231,78 @@ class Client:
         id: str | None = None,
         name: str | None = None,
         description: str | None = None,
-        extra_fields: list[str] | None = None,
+        response_fields: list[str] | None = None,
         division: list[str] | None = None,
-        sort: SortMethod | None = None,
+        sort: models.SortMethod | None = None,
         top: int | None = None,
-    ) -> list[FTAccessZone]:
-        """Get Access zones filtered by name."""
-        access_zones: list[FTAccessZone] = []
+    ) -> list[models.FTAccessZone]:
+        """Retrieve the access zones configured in the system.
+
+        If no filters are applied, all access zones will be returned.
+
+        Args:
+            id: If provided, fetch a single detailed access zone by ID.
+            name: Filter by access zone name (substring match).
+            description: Filter by access zone description (substring match).
+            response_fields:
+                Specify the exact fields to include in the response.
+                If you need the default fields to be included along with other requested fields, pass ['defaults']
+                Additional fields that should be explicitly requested include ['division', 'statusFlags', 'connectedController', 'doors', 'zoneCount', 'commands']
+                Request these fields to get more detailed information about each access zone.
+            division: Filter by division IDs.
+                To get the list of divisions call get_items method with item_types=['Division'].
+            sort: Sort the order of the results.
+            top: Maximum number of results to return.
+
+        Returns:
+            A list of FTAccessZone objects matching the filters.
+        """
         if id:
-            if response := await self._async_request(
-                HTTPMethods.GET,
-                f"{self.api_features.href('accessZones')}/{id}",
-                extra_fields=extra_fields,
-            ):
-                access_zones = [FTAccessZone.from_dict(response)]
-        else:
             response = await self._async_request(
-                HTTPMethods.GET,
-                self.api_features.href("accessZones"),
-                extra_fields=extra_fields,
+                models.HTTPMethods.GET,
+                f"{self.api_features.access_zones()}/{id}",
+                params=models.QueryBase(response_fields=response_fields),
+            )
+            return [models.FTAccessZone.model_validate(response)]
+        response = await self._async_request(
+            models.HTTPMethods.GET,
+            self.api_features.access_zones(),
+            params=models.QueryBase(
                 name=name,
                 description=description,
                 division=division,
+                response_fields=response_fields,
                 sort=sort,
                 top=top,
-            )
-            access_zones = [
-                FTAccessZone.from_dict(item) for item in response["results"]
-            ]
-        return access_zones
+            ),
+        )
+        return [
+            models.FTAccessZone.model_validate(item) for item in response["results"]
+        ]
 
     async def override_access_zone(
         self,
-        command: FTItemReference,
+        command_href: str,
         *,
         end_time: datetime | None = None,
         zone_count: int | None = None,
     ) -> None:
-        """POST an override to an access zone."""
-        data: dict[str, Any] = {}
-        if end_time:
-            data["endTime"] = f"{end_time.isoformat()}Z"
-        if zone_count:
-            data["zoneCount"] = zone_count
+        """Send a POST command to override an access zone.
+
+        Get the command value from the commands field of the FTAccessZone object.
+        Use get_access_zone() with specific id or pass 'commands' in response_fields  to get the access zone commands.
+
+        Args:
+            command_href: This is the href for the command.
+            end_time: The end time for the overridden mode.
+            zone_count: The zone count to set for this access zone.
+        """
         await self._async_request(
-            HTTPMethods.POST,
-            command.href,
-            data=data if data else None,
+            models.HTTPMethods.POST,
+            command_href,
+            data=models.FTAccessZoneCommandBody(
+                end_time=end_time, zone_count=zone_count
+            ),
         )
 
     # endregion Access zone methods
@@ -294,48 +314,67 @@ class Client:
         id: str | None = None,
         name: str | None = None,
         description: str | None = None,
-        extra_fields: list[str] | None = None,
+        response_fields: list[str] | None = None,
         division: list[str] | None = None,
-        sort: SortMethod | None = None,
+        sort: models.SortMethod | None = None,
         top: int | None = None,
-    ) -> list[FTAlarmZone]:
-        """Return list of Alarm zone items."""
-        alarm_zones: list[FTAlarmZone] = []
+    ) -> list[models.FTAlarmZone]:
+        """Retrieve the alarm zones configured in the system.
+
+        Args:
+            id: If provided, fetch a single detailed alarm zone by ID.
+            name: Filter by alarm zone name (substring match).
+            description: Filter by alarm zone description (substring match).
+            response_fields:
+                Specify the exact fields to include in the response.
+                If you need the default fields to be included along with other requested fields, pass ['defaults']
+                Additional fields that should be explicitly requested include ['division', 'statusFlags', 'connectedController', 'commands']
+            division: Filter by division IDs.
+                To get the list of divisions call get_items method with item_types=['Division'].
+            sort: Sort the order of the results.
+            top: Maximum number of results to return.
+
+        Returns:
+            A list of FTAlarmZone objects matching the filters.
+        """
         if id:
-            if response := await self._async_request(
-                HTTPMethods.GET,
-                f"{self.api_features.href('alarmZones')}/{id}",
-                extra_fields=extra_fields,
-            ):
-                alarm_zones = [FTAlarmZone.from_dict(response)]
-        else:
             response = await self._async_request(
-                HTTPMethods.GET,
-                self.api_features.href("alarmZones"),
-                extra_fields=extra_fields,
+                models.HTTPMethods.GET,
+                f"{self.api_features.alarm_zones()}/{id}",
+                params=models.QueryBase(response_fields=response_fields),
+            )
+            return [models.FTAlarmZone.model_validate(response)]
+
+        response = await self._async_request(
+            models.HTTPMethods.GET,
+            self.api_features.alarm_zones(),
+            params=models.QueryBase(
                 name=name,
                 description=description,
                 division=division,
+                response_fields=response_fields,
                 sort=sort,
                 top=top,
-            )
-            alarm_zones = [FTAlarmZone.from_dict(item) for item in response["results"]]
-        return alarm_zones
+            ),
+        )
+        return [models.FTAlarmZone.model_validate(item) for item in response["results"]]
 
     async def override_alarm_zone(
-        self,
-        command: FTItemReference,
-        *,
-        end_time: datetime | None = None,
+        self, command_href: str, *, end_time: datetime | None = None
     ) -> None:
-        """POST an override to an alarm zone."""
-        data: dict[str, Any] = {}
-        if end_time:
-            data["endTime"] = f"{end_time.isoformat()}Z"
+        """Send a POST command to override an alarm zone.
+
+        Get the command value from the commands field of the FTAlarmZone object.
+        Use get_alarm_zone() with specific id or pass 'commands' in response_fields  to get the alarm zone commands.
+
+        Args:
+            command_href: This is the href for the command.
+            end_time: The end time for the overridden mode.
+        """
         await self._async_request(
-            HTTPMethods.POST,
-            command.href,
-            data=data if data else None,
+            models.HTTPMethods.POST,
+            command_href,
+            data=models.FTAlarmZoneCommandBody(end_time=end_time),
         )
 
     # endregion Alarm zone methods
@@ -347,40 +386,60 @@ class Client:
         id: str | None = None,
         name: str | None = None,
         description: str | None = None,
-        extra_fields: list[str] | None = None,
+        response_fields: list[str] | None = None,
         division: list[str] | None = None,
-        sort: SortMethod | None = None,
+        sort: models.SortMethod | None = None,
         top: int | None = None,
-    ) -> list[FTFenceZone]:
-        """Get Fence zones with filteration."""
-        fence_zones: list[FTFenceZone] = []
+    ) -> list[models.FTFenceZone]:
+        """Retrieve the fence zones configured in the system.
+
+        Args:
+            id: If provided, fetch a single detailed fence zone by ID.
+            name: Filter by fence zone name (substring match).
+            description: Filter by fence zone description (substring match).
+            response_fields:
+                Specify the exact fields to include in the response.
+                If you need the default fields to be included along with other requested fields, pass ['defaults']
+                Additional fields that should be explicitly requested include ['division', 'statusFlags', 'connectedController', 'voltage', 'commands']
+            division: Filter by division IDs.
+                To get the list of divisions call get_items method with item_types=['Division'].
+            sort: Sort the order of the results.
+            top: Maximum number of results to return.
+
+        Returns:
+            A list of FTFenceZone objects matching the filters.
+        """
         if id:
-            if response := await self._async_request(
-                HTTPMethods.GET,
-                f"{self.api_features.href('fenceZones')}/{id}",
-                extra_fields=extra_fields,
-            ):
-                fence_zones = [FTFenceZone.from_dict(response)]
-        else:
             response = await self._async_request(
-                HTTPMethods.GET,
-                self.api_features.href("fenceZones"),
-                extra_fields=extra_fields,
+                models.HTTPMethods.GET,
+                f"{self.api_features.fence_zones()}/{id}",
+                params=models.QueryBase(response_fields=response_fields),
+            )
+            return [models.FTFenceZone.model_validate(response)]
+        response = await self._async_request(
+            models.HTTPMethods.GET,
+            self.api_features.fence_zones(),
+            params=models.QueryBase(
                 name=name,
                 description=description,
                 division=division,
+                response_fields=response_fields,
                 sort=sort,
                 top=top,
-            )
-            fence_zones = [FTFenceZone.from_dict(item) for item in response["results"]]
-        return fence_zones
+            ),
+        )
+        return [models.FTFenceZone.model_validate(item) for item in response["results"]]
 
-    async def override_fence_zone(
-        self,
-        command: FTItemReference,
-    ) -> None:
-        """POST an override to a fence zone."""
-        await self._async_request(HTTPMethods.POST, command.href)
+    async def override_fence_zone(self, command_href: str) -> None:
+        """Send a POST command to override a fence zone.
+
+        Get the command value from the commands field of the FTFenceZone object.
+        Use get_fence_zone() with specific id or pass 'commands' in response_fields  to get the fence zone commands.
+
+        Args:
+            command_href: This is the href for the command.
+        """
+        await self._async_request(models.HTTPMethods.POST, command_href)
 
     # endregion Fence zone methods
 
@@ -391,40 +450,61 @@ class Client:
         id: str | None = None,
         name: str | None = None,
         description: str | None = None,
-        extra_fields: list[str] | None = None,
+        response_fields: list[str] | None = None,
         division: list[str] | None = None,
-        sort: SortMethod | None = None,
+        sort: models.SortMethod | None = None,
         top: int | None = None,
-    ) -> list[FTInput]:
-        """Return list of Alarm zone items."""
-        inputs: list[FTInput] = []
+    ) -> list[models.FTInput]:
+        """Retrieve the input items configured in the system.
+
+        Args:
+            id: If provided, fetch a single detailed input item by ID.
+            name: Filter by input item name (substring match).
+            description: Filter by input item description (substring match).
+            response_fields:
+                Specify the exact fields to include in the response.
+                If you need the default fields to be included along with other requested fields, pass ['defaults']
+                Additional fields that should be explicitly requested include
+                ['division', 'statusFlags', 'connectedController', 'commands']
+            division: Filter by division IDs.
+                To get the list of divisions call get_items method with item_types=['Division'].
+            sort: Sort the order of the results.
+            top: Maximum number of results to return.
+
+        Returns:
+            A list of FTInput objects matching the filters.
+        """
         if id:
-            if response := await self._async_request(
-                HTTPMethods.GET,
-                f"{self.api_features.href('inputs')}/{id}",
-                extra_fields=extra_fields,
-            ):
-                inputs = [FTInput.from_dict(response)]
-        else:
             response = await self._async_request(
-                HTTPMethods.GET,
-                self.api_features.href("inputs"),
-                extra_fields=extra_fields,
+                models.HTTPMethods.GET,
+                f"{self.api_features.inputs()}/{id}",
+                params=models.QueryBase(response_fields=response_fields),
+            )
+            return [models.FTInput.model_validate(response)]
+        response = await self._async_request(
+            models.HTTPMethods.GET,
+            self.api_features.inputs(),
+            params=models.QueryBase(
                 name=name,
                 description=description,
                 division=division,
+                response_fields=response_fields,
                 sort=sort,
                 top=top,
-            )
-            inputs = [FTInput.from_dict(item) for item in response["results"]]
-        return inputs
+            ),
+        )
+        return [models.FTInput.model_validate(item) for item in response["results"]]
 
-    async def override_input(
-        self,
-        command: FTItemReference,
-    ) -> None:
-        """POST an override to an input."""
-        await self._async_request(HTTPMethods.POST, command.href)
+    async def override_input(self, command_href: str) -> None:
+        """Send a POST command to override an input item.
+
+        Get the command value from the commands field of the FTInput object.
+        Use get_input() with specific id or pass 'commands' in response_fields  to get the input commands.
+
+        Args:
+            command_href: This is the href for the command.
+        """
+        await self._async_request(models.HTTPMethods.POST, command_href)
 
     # endregion Input methods
 
@@ -435,48 +515,70 @@ class Client:
         id: str | None = None,
         name: str | None = None,
         description: str | None = None,
-        extra_fields: list[str] | None = None,
+        response_fields: list[str] | None = None,
         division: list[str] | None = None,
-        sort: SortMethod | None = None,
+        sort: models.SortMethod | None = None,
         top: int | None = None,
-    ) -> list[FTOutput]:
-        """Return list of output items."""
-        outputs: list[FTOutput] = []
+    ) -> list[models.FTOutput]:
+        """Retrieve the output items configured in the system.
+
+        Args:
+            id: If provided, fetch a single detailed output item by ID.
+            name: Filter by output item name (substring match).
+            description: Filter by output item description (substring match).
+            response_fields:
+                Specify the exact fields to include in the response.
+                If you need the default fields to be included along with other requested fields, pass ['defaults']
+                Additional fields that should be explicitly requested include
+                ['division', 'statusFlags', 'connectedController', 'commands']
+            division: Filter by division IDs.
+                To get the list of divisions call get_items method with item_types=['Division'].
+            sort: Sort the order of the results.
+            top: Maximum number of results to return.
+
+        Returns:
+            A list of FTOutput objects matching the filters.
+        """
         if id:
-            if response := await self._async_request(
-                HTTPMethods.GET,
-                f"{self.api_features.href('outputs')}/{id}",
-                extra_fields=extra_fields,
-            ):
-                outputs = [FTOutput.from_dict(response)]
-        else:
             response = await self._async_request(
-                HTTPMethods.GET,
-                self.api_features.href("outputs"),
-                extra_fields=extra_fields,
+                models.HTTPMethods.GET,
+                f"{self.api_features.outputs()}/{id}",
+                params=models.QueryBase(response_fields=response_fields),
+            )
+            return [models.FTOutput.model_validate(response)]
+
+        response = await self._async_request(
+            models.HTTPMethods.GET,
+            self.api_features.outputs(),
+            params=models.QueryBase(
                 name=name,
                 description=description,
                 division=division,
+                response_fields=response_fields,
                 sort=sort,
                 top=top,
-            )
-            outputs = [FTOutput.from_dict(item) for item in response["results"]]
-        return outputs
+            ),
+        )
+        return [models.FTOutput.model_validate(item) for item in response["results"]]
 
     async def override_output(
-        self,
-        command: FTItemReference,
-        *,
-        end_time: datetime | None = None,
+        self, command_href: str, *, end_time: datetime | timedelta | None = None
     ) -> None:
-        """POST an override to an output."""
-        data: dict[str, Any] = {}
-        if end_time:
-            data["endTime"] = f"{end_time.isoformat()}Z"
+        """Send a POST command to override an input item.
+
+        Get the command value from the commands field of the FTOutput object.
+        Use get_output() with specific id or pass 'commands' in response_fields to get the output commands.
+
+        Args:
+            command_href: This is the href for the command.
+            end_time: The end time for the overridden mode.
+        """
+        if isinstance(end_time, timedelta):
+            end_time = datetime.now(timezone.utc) + end_time
         await self._async_request(
-            HTTPMethods.POST,
-            command.href,
-            data=data if data else None,
+            models.HTTPMethods.POST,
+            command_href,
+            data=models.FTOutputCommandBody(end_time=end_time),
         )
 
     # endregion Output methods
@@ -488,37 +590,61 @@ class Client:
         id: str | None = None,
         name: str | None = None,
         description: str | None = None,
-        extra_fields: list[str] | None = None,
+        response_fields: list[str] | None = None,
         division: list[str] | None = None,
-        sort: SortMethod | None = None,
+        sort: models.SortMethod | None = None,
         top: int | None = None,
-    ) -> list[FTDoor]:
-        """Return list of doors."""
-        doors: list[FTDoor] = []
+    ) -> list[models.FTDoor]:
+        """Retrieve the door items configured in the system.
+
+        Args:
+            id: If provided, fetch a single detailed door item by ID.
+            name: Filter by door item name (substring match).
+            description: Filter by door item description (substring match).
+            response_fields:
+                Specify the exact fields to include in the response.
+                If you need the default fields to be included along with other requested fields, pass ['defaults']
+                Additional fields that should be explicitly requested include
+                ['division', 'statusFlags', 'connectedController', 'entryAccessZone', 'commands']
+            division: Filter by division IDs.
+                To get the list of divisions call get_items method with item_types=['Division'].
+            sort: Sort the order of the results.
+            top: Maximum number of results to return.
+
+        Returns:
+            A list of FTDoor objects matching the filters.
+        """
         if id:
-            if response := await self._async_request(
-                HTTPMethods.GET,
-                f"{self.api_features.href('doors')}/{id}",
-                extra_fields=extra_fields,
-            ):
-                doors = [FTDoor.from_dict(response)]
-        else:
             response = await self._async_request(
-                HTTPMethods.GET,
-                self.api_features.href("doors"),
-                extra_fields=extra_fields,
+                models.HTTPMethods.GET,
+                f"{self.api_features.doors()}/{id}",
+                params=models.QueryBase(response_fields=response_fields),
+            )
+            return [models.FTDoor.model_validate(response)]
+        response = await self._async_request(
+            models.HTTPMethods.GET,
+            self.api_features.doors(),
+            params=models.QueryBase(
+                response_fields=response_fields,
                 name=name,
                 description=description,
                 division=division,
                 sort=sort,
                 top=top,
-            )
-            doors = [FTDoor.from_dict(door) for door in response["results"]]
-        return doors
+            ),
+        )
+        return [models.FTDoor.model_validate(door) for door in response["results"]]
 
-    async def override_door(self, command: FTItemReference) -> None:
-        """override door."""
-        await self._async_request(HTTPMethods.POST, command.href)
+    async def override_door(self, command_href: str) -> None:
+        """Send a POST command to override a door item.
+
+        Get the command value from the commands field of the FTDoor object.
+        Use get_door() with specific id or pass 'commands' in response_fields to get the door commands.
+
+        Args:
+            command_href: This is the href for the command.
+        """
+        await self._async_request(models.HTTPMethods.POST, command_href)
 
     # endregion Door methods
 
@@ -529,33 +655,51 @@ class Client:
         id: str | None = None,
         name: str | None = None,
         description: str | None = None,
-        extra_fields: list[str] | None = None,
+        response_fields: list[str] | None = None,
         division: list[str] | None = None,
-        sort: SortMethod | None = None,
+        sort: models.SortMethod | None = None,
         top: int | None = None,
-    ) -> list[FTCardType]:
-        """Return list of card type items."""
-        card_types: list[FTCardType] = []
+    ) -> list[models.FTCardType]:
+        """Retrieve the card type items configured in the system.
+
+        Args:
+            id: If provided, fetch a single detailed card type item by ID.
+            name: Filter by card type item name (substring match).
+            description: Filter by card type item description (substring match).
+            response_fields:
+                Specify the exact fields to include in the response.
+                If you need the default fields to be included along with other requested fields, pass ['defaults']
+                Additional fields that should be explicitly requested include
+                ['division']
+            division: Filter by division IDs.
+                To get the list of divisions call get_items method with item_types=['Division'].
+            sort: Sort the order of the results.
+            top: Maximum number of results to return.
+
+        Returns:
+            A list of FTCardType objects matching the filters.
+        """
         if id:
-            if response := await self._async_request(
-                HTTPMethods.GET,
-                f"{self.api_features.href('cardTypes')}/{id}",
-                extra_fields=extra_fields,
-            ):
-                card_types = [FTCardType.from_dict(response)]
-        else:
             response = await self._async_request(
-                HTTPMethods.GET,
-                self.api_features.href("cardTypes/assign"),
-                extra_fields=extra_fields,
+                models.HTTPMethods.GET,
+                f"{self.api_features.card_types()}/{id}",
+                params=models.QueryBase(response_fields=response_fields),
+            )
+            return [models.FTCardType.model_validate(response)]
+
+        response = await self._async_request(
+            models.HTTPMethods.GET,
+            self.api_features.card_types("assign"),
+            params=models.QueryBase(
                 name=name,
                 description=description,
                 division=division,
+                response_fields=response_fields,
                 sort=sort,
                 top=top,
-            )
-            card_types = [FTCardType.from_dict(item) for item in response["results"]]
-        return card_types
+            ),
+        )
+        return [models.FTCardType.model_validate(item) for item in response["results"]]
 
     async def get_access_group(
         self,
@@ -563,146 +707,231 @@ class Client:
         id: str | None = None,
         name: str | None = None,
         description: str | None = None,
-        extra_fields: list[str] | None = None,
+        response_fields: list[str] | None = None,
         division: list[str] | None = None,
-        sort: SortMethod | None = None,
+        sort: models.SortMethod | None = None,
         top: int | None = None,
-    ) -> list[FTAccessGroup]:
-        """Get Access groups filtered by name."""
-        access_groups: list[FTAccessGroup] = []
+    ) -> list[models.FTAccessGroup]:
+        """Retrieve the access group items configured in the system.
+
+        Args:
+            id: If provided, fetch a single detailed access group item by ID.
+            name: Filter by access group name (substring match).
+            description: Filter by access group description (substring match).
+            response_fields:
+                Specify the exact fields to include in the response.
+                If you need the default fields to be included along with other requested fields, pass ['defaults']
+                Additional fields that should be explicitly requested include
+                ['children', 'personalDataDefinitions', 'lockUnlockAccessZones',
+                'enterDuringLockdown', 'firstCardUnlock', 'access', 'alarm_zones'].
+            division: Filter by division IDs. To get the list of divisions
+            call get_items method with item_types=['Division'].
+            sort: Sort the order of the results.
+            top: Maximum number of results to return.
+
+        Returns:
+            A list of FTAccessGroup objects matching the filters.
+        """
         if id:
-            if response := await self._async_request(
-                HTTPMethods.GET,
-                f"{self.api_features.href('accessGroups')}/{id}",
-                extra_fields=extra_fields,
-            ):
-                access_groups = [FTAccessGroup.from_dict(response)]
-        else:
             response = await self._async_request(
-                HTTPMethods.GET,
-                self.api_features.href("accessGroups"),
-                extra_fields=extra_fields,
+                models.HTTPMethods.GET,
+                f"{self.api_features.access_groups()}/{id}",
+                params=models.QueryBase(response_fields=response_fields),
+            )
+            return [models.FTAccessGroup.model_validate(response)]
+
+        response = await self._async_request(
+            models.HTTPMethods.GET,
+            self.api_features.access_groups(),
+            params=models.QueryBase(
                 name=name,
                 description=description,
                 division=division,
+                response_fields=response_fields,
                 sort=sort,
                 top=top,
-            )
-            access_groups = [
-                FTAccessGroup.from_dict(item) for item in response["results"]
-            ]
-        return access_groups
+            ),
+        )
+        return [
+            models.FTAccessGroup.model_validate(item) for item in response["results"]
+        ]
 
     async def get_operator_group(
         self,
         *,
         name: str | None = None,
         description: str | None = None,
-        extra_fields: list[str] | None = None,
+        response_fields: list[str] | None = None,
         division: list[str] | None = None,
-        sort: SortMethod | None = None,
+        sort: models.SortMethod | None = None,
         top: int | None = None,
-    ) -> list[FTOperatorGroup]:
-        """Get Operator groups."""
+    ) -> list[models.FTOperatorGroup]:
+        """Retrieve the operator group items configured in the system.
+
+        Args:
+            id: If provided, fetch a single detailed operator group item by ID.
+            name: Filter by operator group item name (substring match).
+            description: Filter by operator group item description (substring match).
+            response_fields:
+                Specify the exact fields to include in the response.
+                If you need the default fields to be included along with other requested fields, pass ['defaults']
+                Additional fields that should be explicitly requested include
+                ['division', 'cardholders', 'divisions'].
+            division: Filter by division IDs.
+                To get the list of divisions call get_items method with item_types=['Division'].
+            sort: Sort the order of the results.
+            top: Maximum number of results to return.
+
+        Returns:
+            A list of FTAccessGroup objects matching the filters.
+        """
         response = await self._async_request(
-            HTTPMethods.GET,
-            self.api_features.href("operatorGroups"),
-            extra_fields=extra_fields or ["cardholders"],
-            name=name,
-            description=description,
-            division=division,
-            sort=sort,
-            top=top,
+            models.HTTPMethods.GET,
+            self.api_features.operator_groups(),
+            params=models.QueryBase(
+                name=name,
+                description=description,
+                division=division,
+                response_fields=response_fields,
+                sort=sort,
+                top=top,
+            ),
         )
-        return [FTOperatorGroup.from_dict(item) for item in response["results"]]
+        return [
+            models.FTOperatorGroup.model_validate(item) for item in response["results"]
+        ]
 
     async def get_operator_group_members(
-        self, *, href: str, extra_fields: list[str] | None = None
-    ) -> list[FTLinkItem]:
-        """Get Operator group members."""
+        self, href: str, *, response_fields: list[str] | None = None
+    ) -> list[models.FTOperatorGroupMembership]:
+        """Retrieve the list of operators that are members of this operator group.
+
+        Args:
+            href: The href to the operator group members. this is the 'cardholders' field of the FTOperatorGroup object.
+            response_fields: To get the href field in FTOperatorGroupMembership use ['cardholder', 'href'] in response_fields.
+
+        Returns:
+            A list of FTOperatorGroupMembership objects matching the filters.
+        """
         response = await self._async_request(
-            HTTPMethods.GET, href, extra_fields=extra_fields
+            models.HTTPMethods.GET,
+            href,
+            params=models.QueryBase(response_fields=response_fields),
         )
-        operator_group_memberships = [
-            FTOperatorGroupMembership.from_dict(item)
+        return [
+            models.FTOperatorGroupMembership.model_validate(item)
             for item in response["cardholders"]
         ]
-        return [item.cardholder for item in operator_group_memberships]
 
     async def get_personal_data_field(
         self,
         *,
         id: str | None = None,
         name: str | None = None,
-        extra_fields: list[str] | None = None,
+        description: str | None = None,
+        response_fields: list[str] | None = None,
         division: list[str] | None = None,
-        sort: SortMethod | None = None,
+        sort: models.SortMethod | None = None,
         top: int | None = None,
-    ) -> list[FTPersonalDataFieldDefinition]:
-        """Return List of available personal data fields."""
-        pdfs: list[FTPersonalDataFieldDefinition] = []
+    ) -> list[models.FTPersonalDataFieldDefinition]:
+        """Retrieve the personal data field items configured in the system.
+
+        Args:
+            id: If provided, fetch a single detailed personal data field item by ID.
+            name: Filter by personal data field item name (substring match).
+            description: Filter by personal data field item description (substring match).
+            response_fields:
+                Specify the exact fields to include in the response.
+                If you need the default fields to be included along with other requested fields, pass ['defaults']
+                Additional fields that should be explicitly requested include
+                ['description', 'division', 'type', 'accessGroups,
+                'isProfileImage', 'unique'].
+            division: Filter by division IDs.
+                To get the list of divisions call get_items method with item_types=['Division'].
+            sort: Sort the order of the results.
+            top: Maximum number of results to return.
+
+        Returns:
+            A list of FTPersonalDataFieldDefinition objects matching the filters.
+        """
         if id:
-            if response := await self._async_request(
-                HTTPMethods.GET,
-                f"{self.api_features.href('personalDataFields')}/{id}",
-                extra_fields=extra_fields,
-            ):
-                pdfs = [FTPersonalDataFieldDefinition.from_dict(response)]
-        else:
             response = await self._async_request(
-                HTTPMethods.GET,
-                self.api_features.href("personalDataFields"),
+                models.HTTPMethods.GET,
+                f"{self.api_features.personal_data_fields()}/{id}",
+                params=models.QueryBase(response_fields=response_fields),
+            )
+            return [models.FTPersonalDataFieldDefinition.model_validate(response)]
+
+        response = await self._async_request(
+            models.HTTPMethods.GET,
+            self.api_features.personal_data_fields(),
+            params=models.QueryBase(
                 name=name,
-                extra_fields=extra_fields,
+                description=description,
+                response_fields=response_fields,
                 division=division,
                 sort=sort,
                 top=top,
-            )
-            pdfs = [
-                FTPersonalDataFieldDefinition.from_dict(pdf)
-                for pdf in response["results"]
-            ]
+            ),
+        )
+        return [
+            models.FTPersonalDataFieldDefinition.model_validate(pdf)
+            for pdf in response["results"]
+        ]
 
-        return pdfs
+    async def get_image_pdf(
+        self, pdf_href: str, b64: bool = False
+    ) -> bytes | str | None:
+        """Return the image content from the PDF href.
 
-    async def get_image_from_pdf(self, pdf_reference: FTItemReference) -> str | None:
-        """Returns base64 string of the image field."""
-        if response := await self._async_request(HTTPMethods.GET, pdf_reference.href):
+        Args:
+            pdf_href: The href to the personal data field that contains the image.
+            b64: If True, return the image as a base64 string. If False, return as bytes.
+
+        Returns:
+            The image content as bytes or base64 string, or None if not found.
+        """
+        if response := await self._async_request(models.HTTPMethods.GET, pdf_href):
             if not isinstance(response.get("results"), bytes):
-                raise ValueError(f"{pdf_reference.href} is not an image href")
-            return base64.b64encode(response["results"]).decode("utf-8")
+                raise ValueError(f"{pdf_href} is not an image href")
+            return (
+                base64.b64encode(response["results"]).decode("utf-8")
+                if b64
+                else response["results"]
+            )
         return None
 
     async def _search_cardholders(
-        self,
-        *,
-        name: str | None = None,
-        pdfs: dict[str, str] | None = None,
-        extra_fields: list[str] | None = None,
-        division: list[str] | None = None,
-        sort: SortMethod | None = None,
-        top: int | None = None,
+        self, query: models.CardholderQuery
     ) -> dict[str, Any]:
-        """Fetch cardholders from the server."""
-        params: dict[str, str] = {}
-        if pdfs:
-            for pdf, value in pdfs.items():
-                if not pdf.isdigit():
-                    if not (pdf_field := await self.get_personal_data_field(name=pdf)):
-                        raise GllApiError(f"pdf field: {pdf} not found")
-                    # if pdf name is correct the result should include one item only
-                    pdf = pdf_field[0].id
-                params.update({f"pdf_{pdf}": value})
+        """Retrieve the cardholder items configured in the system.
+
+        This is in internal method. use get_cardholder() or yield_cardholders() methods.
+
+        Args:
+            query: The CardholderQuery object containing the search parameters.
+
+        Returns:
+            A response dict from the query.
+        """
+        if query.pdfs:
+            pdf_dict: dict[str, str] = {}
+            for name, value in query.pdfs.items():
+                if str(name).isdigit():
+                    pdf_id = str(name)
+                else:
+                    pdf_field = await self.get_personal_data_field(
+                        name=name, response_fields=["id"]
+                    )
+                    if not pdf_field:
+                        raise GllApiError(f"pdf field: {name} not found")
+                    assert pdf_field[0].id
+                    pdf_id = pdf_field[0].id
+                pdf_dict[f"pdf_{pdf_id}"] = value
+            query.pdfs = pdf_dict
 
         return await self._async_request(
-            HTTPMethods.GET,
-            self.api_features.href("cardholders"),
-            params=params,
-            name=name,
-            extra_fields=extra_fields,
-            division=division,
-            sort=sort,
-            top=top,
+            models.HTTPMethods.GET, self.api_features.cardholders(), params=query
         )
 
     async def get_cardholder(
@@ -710,32 +939,66 @@ class Client:
         *,
         id: str | None = None,
         name: str | None = None,
+        description: str | None = None,
+        access_zones: str | list[str] | None = None,
         pdfs: dict[str, str] | None = None,
-        extra_fields: list[str] | None = None,
+        response_fields: list[str] | None = None,
         division: list[str] | None = None,
-        sort: SortMethod | None = None,
+        sort: models.SortMethod | None = None,
         top: int | None = None,
-    ) -> list[FTCardholder]:
-        """Return list of cardholders."""
-        if id:
-            if response := await self._async_request(
-                HTTPMethods.GET,
-                f"{self.api_features.href('cardholders')}/{id}",
-                extra_fields=extra_fields,
-            ):
-                return [FTCardholder.from_dict(response)]
+    ) -> list[models.FTCardholder]:
+        """Retrieve the cardholder items configured in the system.
 
-        response = await self._search_cardholders(
+        This will return the top 100 or 1000 results (depending on the version of CC) or what you specify in top parameter.
+        If you want to get all cardholders consider using yield_cardholders() method.
+
+        Args:
+            id: If provided, fetch a single detailed cardholder item by ID.
+            name: Filter by cardholder item name (substring match).
+            description: Filter by cardholder item description (substring match).
+            access_zones: Filter cardholders that are currently registered inside an access zone.
+                Pass a list of access zone ids. To get the list of access zones call get_access_zone() method.
+                Pass '*' to get cardholders that registered inside any access zone.
+                Ignore it to not filter by access zones presence.
+                pass "lastSuccessfulAccessZone" in response_fields to get the name of the registered access zone.
+            pdfs: Provide a dict of personal field ID or name and value to filter by personal data fields.
+                Example: {'1': 'John'} or {'EmployeeID': '12345'}
+            response_fields:
+                Specify the exact fields to include in the response.
+                If you need the default fields to be included along with other requested fields, pass ['defaults']
+                Additional fields that should be explicitly requested include
+                ['division', 'personalDataFields', 'cards', 'accessGroups']. Refer to the FTCardholder model for other available fields
+            division: Filter by division IDs.
+                For example, to get the personal fields in the results pass ["personalDataFields"].
+                To get the list of divisions call get_items method with item_types=['Division'].
+            sort: Sort the order of the results.
+            top: Maximum number of results to return.
+
+        Returns:
+            A list of FTCardholder objects matching the filters.
+        """
+        if id:
+            response = await self._async_request(
+                models.HTTPMethods.GET,
+                f"{self.api_features.cardholders()}/{id}",
+                params=models.QueryBase(response_fields=response_fields),
+            )
+            return [models.FTCardholder.model_validate(response)]
+
+        query = models.CardholderQuery(
             name=name,
+            description=description,
+            access_zones=access_zones,
             pdfs=pdfs,
-            extra_fields=extra_fields,
+            response_fields=response_fields,
             division=division,
             sort=sort,
             top=top,
         )
-        _LOGGER.debug(response)
+        response = await self._search_cardholders(query)
         return [
-            FTCardholder.from_dict(cardholder) for cardholder in response["results"]
+            models.FTCardholder.model_validate(cardholder)
+            for cardholder in response["results"]
         ]
 
     async def yield_cardholders(
@@ -743,220 +1006,351 @@ class Client:
         *,
         name: str | None = None,
         pdfs: dict[str, str] | None = None,
-        extra_fields: list[str] | None = None,
+        response_fields: list[str] | None = None,
         division: list[str] | None = None,
-        sort: SortMethod | None = None,
+        sort: models.SortMethod | None = None,
         top: int | None = None,
-    ) -> AsyncIterator[list[FTCardholder]]:
-        """Return Async iterator list of cardholders."""
-        response = await self._search_cardholders(
+    ) -> AsyncGenerator[list[models.FTCardholder]]:
+        """Returns an Iterator over the cardholder items configured in the system.
+
+        This is useful for looping over cardholder in batches. Each iteration returns the number of cardholders specified in the top parameter (default 100 or 1000 depending on the version of CC).
+
+        Args:
+            name: Filter by cardholder item name (substring match).
+            description: Filter by cardholder item description (substring match).
+            pdfs: Provide a dict of personal field ID or name and value to filter by personal data fields.
+                Example: {'1': 'John'} or {'EmployeeID': '12345'}
+            response_fields:
+                Specify the exact fields to include in the response.
+                If you need the default fields to be included along with other requested fields, pass ['defaults']
+                Additional fields that should be explicitly requested include
+                ['division', 'personalDataFields', 'cards', 'accessGroups']. Refer to the FTCardholder model for other available fields
+            division: Filter by division IDs.
+                To get the list of divisions call get_items method with item_types=['Division'].
+            sort: Sort the order of the results.
+            top: Maximum number of results to return.
+
+        Returns:
+            An Async Iterator of FTCardholder objects matching the filters.
+        """
+        query = models.CardholderQuery(
             name=name,
             pdfs=pdfs,
-            extra_fields=extra_fields,
+            response_fields=response_fields,
             division=division,
             sort=sort,
             top=top or 100,
         )
+        response = await self._search_cardholders(query)
         while True:
             _LOGGER.debug(response)
             yield [
-                FTCardholder.from_dict(cardholder) for cardholder in response["results"]
+                models.FTCardholder.model_validate(cardholder)
+                for cardholder in response["results"]
             ]
             await asyncio.sleep(1)
             if not (next_link := response.get("next")):
                 break
-            response = await self._async_request(HTTPMethods.GET, next_link["href"])
+            response = await self._async_request(
+                models.HTTPMethods.GET, next_link["href"]
+            )
 
-    async def get_cardholder_changes(self, href) -> tuple[list[CardholderChange], str]:
-        """Return list of cardholder changes."""
-        response = await self._async_request(HTTPMethods.GET, href)
-        changes = [CardholderChange.from_dict(change) for change in response["results"]]
+    async def get_cardholder_changes(
+        self, changes_href: str
+    ) -> tuple[list[models.CardholderChange], str]:
+        """Return list of cardholder changes.
+
+        Args:
+            changes_href: The href to get the cardholder changes. Get this href from get_cardholder_changes_href method.
+
+        Returns:
+            A tuple of list of CardholderChange objects and the next href to get new changes.
+        """
+        response = await self._async_request(models.HTTPMethods.GET, changes_href)
+        changes = [
+            models.CardholderChange.model_validate(change)
+            for change in response["results"]
+        ]
         return changes, response["next"]["href"]
 
     async def get_cardholder_changes_href(
         self,
         *,
-        top: int | None = None,
         filter: list[str] | None = None,
         cardholder_fields: list[str] | None = None,
-        extra_fields: list[str] | None = None,
+        response_fields: list[str] | None = None,
+        top: int | None = None,
     ) -> str:
-        """Return the next href to get cardholder changes."""
-        params: dict[str, Any] = {}
-        if top:
-            params["top"] = top
-        if filter:
-            params["filter"] = ",".join(filter)
-        if cardholder_fields:
-            params["fields"] = ",".join(
-                f"cardholder.{field}" for field in cardholder_fields
-            )
-        if extra_fields:
-            fields = params.setdefault("fields", "")
-            params["fields"] = f"{fields},{','.join(extra_fields)}"
+        """Construct the filtered cardholder changes that you want to monitor.
 
+        Args:
+            filter: List of cardholder fields that you want to monitor. Refer to the FTCardholder model for available fields.
+                Example: ['name', 'cards','cards.from', 'accessGroups']
+            cardholder_fields: List of cardholder fields to include in the response.
+                Example: ['id', 'name', 'cards', 'cards.from', 'accessGroups', 'division', 'personalDataDefinitions']. Refer to the FTCardholder model for other available fields
+            response_fields:
+                Specify the fields to include in the response.
+                Possible values are
+                ['href', 'operator', 'operator.href', 'operator.name',
+                'time', 'type', 'item', 'oldValues', 'newValues', 'cardholder']
+            top: Maximum number of results to return.
+
+        Returns:
+            The href string to get the cardholder changes.
+        """
         response = await self._async_request(
-            HTTPMethods.GET,
-            self.api_features.href("cardholders/changes"),
-            params=params or None,
+            models.HTTPMethods.GET,
+            self.api_features.cardholders("changes"),
+            params=models.CardholderChangesQuery(
+                filter=filter,
+                cardholder_fields=cardholder_fields,
+                response_fields=response_fields,
+                top=top,
+            ),
         )
         return response["next"]["href"]
 
-    async def add_cardholder(self, cardholder: FTNewCardholder) -> FTItemReference:
-        """Add a new cardholder in Gallagher."""
+    async def add_cardholder(
+        self, cardholder: models.FTNewCardholder
+    ) -> models.FTItemReference:
+        """Add a new cardholder in Gallagher.
+
+        Args:
+            cardholder: The constructed FTCardholder object containing the cardholder details. Or a dict with the cardholder data which will be used to construct the object.
+
+        Returns:
+            The FTItemReference to the newly created cardholder.
+        """
         response = await self._async_request(
-            HTTPMethods.POST,
-            self.api_features.href("cardholders"),
-            data=cardholder.as_dict(),
+            models.HTTPMethods.POST, self.api_features.cardholders(), data=cardholder
         )
-        return FTItemReference(response["location"])
+        return models.FTItemReference(href=response.get("location", ""))
 
     async def update_cardholder(
-        self, cardholder_href: str, cardholder_updates: FTNewCardholder
+        self,
+        cardholder_href: str,
+        patched_cardholder: models.FTCardholderPatch,
     ) -> None:
-        """Update existing cardholder in Gallagher."""
+        """Update existing cardholder in the system.
+
+        Args:
+            cardholder_href: The href of the cardholder to update.
+            patched_cardholder: The patched FTCardholder object containing the updated cardholder details.
+        """
         await self._async_request(
-            HTTPMethods.PATCH,
-            cardholder_href,
-            data=cardholder_updates.as_dict(),
+            models.HTTPMethods.PATCH, cardholder_href, data=patched_cardholder
         )
 
     async def remove_cardholder(self, cardholder_href: str) -> None:
-        """Remove existing cardholder in Gallagher."""
-        await self._async_request(HTTPMethods.DELETE, cardholder_href)
+        """Remove existing cardholder in Gallagher.
+
+        Args:
+            cardholder_href: The href of the cardholder to remove.
+        """
+        await self._async_request(models.HTTPMethods.DELETE, cardholder_href)
 
     # endregion Cardholder methods
 
     # region Event methods
-    async def _update_event_types(self) -> None:
-        """Fetch list of event groups and types from server."""
+
+    async def _fetch_event_types_and_groups(self) -> None:
+        """Internal method to fetch event groups and types from server."""
         response = await self._async_request(
-            HTTPMethods.GET, self.api_features.href("events/eventGroups")
+            models.HTTPMethods.GET, self.api_features.events("eventGroups")
         )
 
         for item in response["eventGroups"]:
-            event_group = FTEventGroup.from_dict(item)
+            event_group = models.FTEventGroup.model_validate(item)
             self.event_groups[event_group.name] = event_group
 
         for event_group in self.event_groups.values():
             self.event_types.update(
-                {event_type.name: event_type for event_type in event_group.eventTypes}
+                {event_type.name: event_type for event_type in event_group.event_types}
             )
 
+    async def get_event_types(self) -> dict[str, models.FTEventType]:
+        """Return the dictionary of event types."""
+        if not self.event_types:
+            await self._fetch_event_types_and_groups()
+        return self.event_types
+
+    async def get_event_groups(self) -> dict[str, models.FTEventGroup]:
+        """Return the dictionary of event groups."""
+        if not self.event_groups:
+            await self._fetch_event_types_and_groups()
+        return self.event_groups
+
     async def get_events(
-        self, event_filter: EventFilter | None = None
-    ) -> list[FTEvent]:
-        """Return list of events filtered by params."""
-        events: list[FTEvent] = []
-        if response := await self._async_request(
-            HTTPMethods.GET,
-            self.api_features.href("events"),
-            params=event_filter.as_dict() if event_filter else None,
-        ):
-            events = [FTEvent.from_dict(event) for event in response["events"]]
-        return events
+        self, event_filter: models.EventQuery | None = None
+    ) -> list[models.FTEvent]:
+        """Return list of events filtered by params.
+
+        By default the result will contain no more than 1000 events.
+        For efficient transfer of large numbers of events you can increase this using the 'top' field in the event query.
+
+        Args:
+            event_filter: The EventQuery object containing the filter parameters.
+
+        Returns:
+            A list of FTEvent objects matching the filters.
+        """
+        response = await self._async_request(
+            models.HTTPMethods.GET, self.api_features.events(), params=event_filter
+        )
+        return [models.FTEvent.model_validate(event) for event in response["events"]]
 
     async def get_new_events(
         self,
-        event_filter: EventFilter | None = None,
+        event_filter: models.EventQuery | None = None,
         next: str | None = None,
-    ) -> tuple[list[FTEvent], str]:
-        """
-        Return new events filtered by params and the link for the next event search.
+    ) -> tuple[list[models.FTEvent], str]:
+        """This method retrieves new events with a next link.
+
+        Poll this link to receive new events that match the specified filters. If there are none ready, the call will block until one arrives or a deadline passes.
+
+        Args:
+            event_filter: The EventQuery object containing the filter parameters.
+                The first time this method is called, provide the event_filter only.
+            next: Pass the next link href for subsequent calls to get new events.
+
+        Returns:
+            A tuple of list of FTEvent objects matching the filters and the next href string.
         """
         if next is not None:
-            response = await self._async_request(
-                HTTPMethods.GET,
-                next,
-            )
+            response = await self._async_request(models.HTTPMethods.GET, next)
         else:
             response = await self._async_request(
-                HTTPMethods.GET,
-                self.api_features.href("events"),
-                params=event_filter.as_dict() if event_filter else None,
+                models.HTTPMethods.GET, self.api_features.events(), params=event_filter
             )
-        _LOGGER.debug(response)
-        events: list[FTEvent] = [
-            FTEvent.from_dict(event) for event in response["events"]
-        ]
+        events = [models.FTEvent.model_validate(event) for event in response["events"]]
         next_href: str = response["next"]["href"]
         return (events, next_href)
 
     async def yield_new_events(
-        self, event_filter: EventFilter | None = None
-    ) -> AsyncIterator[list[FTEvent]]:
-        """Yield a list of new events filtered by params."""
+        self, event_filter: models.EventQuery | None = None
+    ) -> AsyncGenerator[list[models.FTEvent]]:
+        """Yield a list of new events filtered by params.
+
+        This creates a generator for new events that match the specified filters.
+
+        Args:
+            event_filter: The EventQuery object containing the filter parameters.
+
+        Yields:
+            A list of FTEvent objects matching the filters.
+        """
         response = await self._async_request(
-            HTTPMethods.GET,
-            self.api_features.href("events/updates"),
-            params=event_filter.as_dict() if event_filter else None,
+            models.HTTPMethods.GET,
+            self.api_features.events("updates"),
+            params=event_filter,
         )
         while True:
             _LOGGER.debug(response)
-            yield [FTEvent.from_dict(event) for event in response["events"]]
+            yield [models.FTEvent.model_validate(event) for event in response["events"]]
             await asyncio.sleep(1)
-            # Check if next link should be called,
-            # how to tell if there are more events in next link
             response = await self._async_request(
-                HTTPMethods.GET,
-                response["updates"]["href"],
-                params=event_filter.as_dict() if event_filter else None,
+                models.HTTPMethods.GET, response["updates"]["href"]
             )
 
-    async def push_event(self, event: EventPost) -> FTItemReference | None:
-        """Push a new event to Gallagher and return the event href."""
+    async def push_event(self, event: models.EventPost) -> models.FTItemReference:
+        """Push a new event to Gallagher and return the event href.
+
+        Args:
+            event: The EventPost object containing the event details.
+
+        Returns:
+            The FTItemReference to the newly created event, or None if not available.
+        """
         response = await self._async_request(
-            HTTPMethods.POST, self.api_features.href("events"), data=event.as_dict()
+            models.HTTPMethods.POST, self.api_features.events(), data=event
         )
-        if "location" in response:
-            return FTItemReference(response["location"])
-        return None
+        return models.FTItemReference(href=response.get("location", ""))
 
     # endregion Event methods
 
     # region Alarm methods
 
-    async def get_alarms(self, extra_fields: list[str] | None = None) -> list[FTAlarm]:
-        """Return list of alarms."""
-        alarms: list[FTAlarm] = []
+    async def get_alarms(
+        self, response_fields: list[str] | None = None
+    ) -> list[models.FTAlarm]:
+        """Return list of alarms.
+
+        Args:
+            response_fields:
+                Specify the exact fields to include in the response.
+                If you need the default fields to be included along with other requested fields, pass ['defaults']
+                Additional fields that should be explicitly requested include
+                ['details', 'history', 'instruction', 'cardholder']
+
+        Returns:
+            A list of FTAlarm objects.
+        """
+        alarms: list[models.FTAlarm] = []
         if response := await self._async_request(
-            HTTPMethods.GET, self.api_features.href("alarms"), extra_fields=extra_fields
+            models.HTTPMethods.GET,
+            self.api_features.alarms(),
+            params=models.QueryBase(response_fields=response_fields),
         ):
-            alarms = [FTAlarm.from_dict(alarm) for alarm in response["alarms"]]
+            alarms = [
+                models.FTAlarm.model_validate(alarm) for alarm in response["alarms"]
+            ]
             while "next" in response:
                 if response2 := await self._async_request(
-                    HTTPMethods.GET,
+                    models.HTTPMethods.GET,
                     response["next"]["href"],
-                    extra_fields=extra_fields,
+                    params=models.QueryBase(response_fields=response_fields),
                 ):
                     alarms.extend(
-                        FTAlarm.from_dict(alarm) for alarm in response2["alarms"]
+                        models.FTAlarm.model_validate(alarm)
+                        for alarm in response2["alarms"]
                     )
         return alarms
 
     async def yield_new_alarms(
-        self, extra_fields: list[str] | None = None
-    ) -> AsyncIterator[list[FTAlarm]]:
-        """Yield a list of new alarms."""
+        self, response_fields: list[str] | None = None
+    ) -> AsyncGenerator[list[models.FTAlarm]]:
+        """Yield a list of new alarms.
+
+        Args:
+            response_fields:
+                Specify the exact fields to include in the response.
+                If you need the default fields to be included along with other requested fields, pass ['defaults']
+                Additional fields that should be explicitly requested include
+                ['details', 'history', 'instruction', 'cardholder']
+
+        Yields:
+            A list of FTAlarm objects.
+        """
         response = await self._async_request(
-            HTTPMethods.GET,
-            self.api_features.href("alarms/updates"),
-            extra_fields=extra_fields,
+            models.HTTPMethods.GET,
+            self.api_features.alarms("updates"),
+            params=models.QueryBase(response_fields=response_fields),
         )
         while True:
             _LOGGER.debug(response)
-            yield [FTAlarm.from_dict(alarm) for alarm in response["updates"]]
+            yield [
+                models.FTAlarm.model_validate(alarm) for alarm in response["updates"]
+            ]
             await asyncio.sleep(1)
             response = await self._async_request(
-                HTTPMethods.GET, response["next"]["href"], extra_fields=extra_fields
+                models.HTTPMethods.GET,
+                response["next"]["href"],
+                params=models.QueryBase(response_fields=response_fields),
             )
 
-    async def alarm_action(self, action: FTItemReference, comment: str | None) -> None:
-        """post an alarm action (with optional comment)."""
+    async def alarm_action(self, action_href: str, comment: str | None) -> None:
+        """Post an alarm action (with optional comment).
+
+        Args:
+            action_href: The FTItemReference for the alarm action command.
+                This must be obtained from the FTAlarm object commands field. To get the alarm object use get_alarms method.
+            comment: Optional comment to include with the alarm action.
+                This is supported for ['comment', 'acknowledgeWithComment', 'processWithComment'] commands only.
+        """
         await self._async_request(
-            HTTPMethods.POST,
-            action.href,
-            data={"comment": comment} if comment else None,
+            models.HTTPMethods.POST,
+            action_href,
+            data=models.FTAlarmCommandBody(comment=comment),
         )
 
     # endregion Alarm methods
@@ -965,22 +1359,33 @@ class Client:
     async def get_item_status(
         self,
         item_ids: list[str] | None = None,
-        next_link: FTItemReference | None = None,
-    ) -> tuple[list[FTItemStatus], FTItemReference]:
-        """Subscribe to items status and return list of updates with next link."""
+        next_link: str | None = None,
+    ) -> tuple[list[models.FTItemStatus], models.FTItemReference]:
+        """Subscribe to items status and return list of item updates with next link.
+
+        Args:
+            item_ids: List of item IDs to get status for.
+                The first call should only include the item IDs.
+            next_link: The next link href to get new updates.
+                This is returned from a previous call to this method.
+                No need to pass the item_ids when passing the next_link.
+
+        Returns:
+            A tuple of list of FTItemStatus objects and the next FTItemReference link to get new updates.
+        """
         if next_link:
-            response = await self._async_request(HTTPMethods.GET, next_link.href)
+            response = await self._async_request(models.HTTPMethods.GET, next_link)
         elif item_ids:
             response = await self._async_request(
-                HTTPMethods.POST,
-                self.api_features.href("items/updates"),
-                data={"itemIds": item_ids},
+                models.HTTPMethods.POST,
+                self.api_features.items("updates"),
+                data=models.ItemStatusQuery(item_ids=item_ids),
             )
         else:
             raise ValueError("item ids or a next link must be provided")
         return (
-            [FTItemStatus(**item) for item in response["updates"]],
-            FTItemReference(**response["next"]),
+            [models.FTItemStatus.model_validate(item) for item in response["updates"]],
+            models.FTItemReference.model_validate(response["next"]),
         )
 
     # endregion Status and override methods
@@ -992,45 +1397,79 @@ class Client:
         id: str | None = None,
         name: str | None = None,
         description: str | None = None,
-        extra_fields: list[str] | None = None,
+        response_fields: list[str] | None = None,
         division: list[str] | None = None,
-        sort: SortMethod | None = None,
+        sort: models.SortMethod | None = None,
         top: int | None = None,
-    ) -> list[FTLockerBank]:
-        """Return list of locker banks."""
-        locker_banks: list[FTLockerBank] = []
+    ) -> list[models.FTLockerBank]:
+        """Retrieve the list of locker bank items configured in the system.
+
+        Args:
+            id: If provided, fetch a single detailed locker bank item by ID.
+            name: Filter by locker bank item name (substring match).
+            description: Filter by locker bank item description (substring match).
+            response_fields:
+                Specify the exact fields to include in the response.
+                If you need the default fields to be included along with other requested fields, pass ['defaults']
+                Additional fields that should be explicitly requested include
+                ['connectedController', 'lockers']
+            division: Filter by division IDs.
+                To get the list of divisions call get_items method with item_types=['Division'].
+            sort: Sort the order of the results.
+            top: Maximum number of results to return.
+
+        Returns:
+            A list of FTLockerBank objects matching the filters.
+        """
         if id:
-            if response := await self._async_request(
-                HTTPMethods.GET,
-                f"{self.api_features.href('lockerBanks')}/{id}",
-                extra_fields=extra_fields,
-            ):
-                locker_banks = [FTLockerBank.from_dict(response)]
-        else:
             response = await self._async_request(
-                HTTPMethods.GET,
-                self.api_features.href("lockerBanks"),
-                extra_fields=extra_fields,
+                models.HTTPMethods.GET,
+                f"{self.api_features.locker_banks()}/{id}",
+                params=models.QueryBase(response_fields=response_fields),
+            )
+            return [models.FTLockerBank.model_validate(response)]
+
+        response = await self._async_request(
+            models.HTTPMethods.GET,
+            self.api_features.locker_banks(),
+            params=models.QueryBase(
                 name=name,
                 description=description,
                 division=division,
+                response_fields=response_fields,
                 sort=sort,
                 top=top,
-            )
-            locker_banks = [
-                FTLockerBank.from_dict(locker) for locker in response["results"]
-            ]
-        return locker_banks
-
-    async def get_locker(self, id: str | None = None) -> FTLocker | None:
-        """Return locker object."""
-        response: dict[str, Any] = await self._async_request(
-            HTTPMethods.GET, f"{self.server_url}/api/lockers/{id}"
+            ),
         )
-        return FTLocker.from_dict(response) if response else None
+        return [
+            models.FTLockerBank.model_validate(locker) for locker in response["results"]
+        ]
 
-    async def override_locker(self, command: FTItemReference) -> None:
-        """override locker."""
-        await self._async_request(HTTPMethods.POST, command.href)
+    async def get_locker(self, id: str | None = None) -> models.FTLocker | None:
+        """Return locker item by id.
+
+        Args:
+            id: The locker ID.
+
+        Returns:
+            The FTLocker object if found, else None.
+        """
+        try:
+            response: dict[str, Any] = await self._async_request(
+                models.HTTPMethods.GET, f"{self.server_url}/api/lockers/{id}"
+            )
+        except RequestError as err:
+            _LOGGER.warning(str(err))
+            return None
+        return models.FTLocker.model_validate(response)
+
+    async def override_locker(self, command_href: str) -> None:
+        """override locker.
+
+        Args:
+            command_href: The FTItemReference for the override locker command.
+                This must be obtained from the FTLockerBank commands field.
+        """
+        await self._async_request(models.HTTPMethods.POST, command_href)
 
     # endregion Lockers methods

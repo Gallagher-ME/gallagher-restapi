@@ -1,15 +1,12 @@
 """Test getting the status of items."""
 
-import pytest
-
 from gallagher_restapi import Client
 
 
-@pytest.mark.asyncio
 async def test_get_item_status(gll_client: Client) -> None:
     """Test getting the status of items from Gallagher."""
     controllers = await gll_client.get_item(
-        item_types=["Controller 6000"], extra_fields=["statusFlags"]
+        item_types=["Controller 6000"], response_fields=["statusFlags"]
     )
     controller_status, update = await gll_client.get_item_status(
         [controller.id for controller in controllers]

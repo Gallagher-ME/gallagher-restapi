@@ -2,19 +2,21 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Callable
-from dataclasses import dataclass, field, fields
 from datetime import datetime
 from enum import StrEnum
-from typing import Any, Type, TypeVar
+from typing import Any
 
-import pytz
-from dacite import Config, from_dict
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_serializer,
+    field_validator,
+    model_validator,
+)
 
-from gallagher_restapi.exceptions import LicenseError
-
-T = TypeVar("T")
+from .exceptions import LicenseError
 
 MOVEMENT_EVENT_TYPES = ["20001", "20002", "20003", "20047", "20107", "42415"]
 
@@ -29,7 +31,7 @@ class HTTPMethods(StrEnum):
 
 
 class SortMethod(StrEnum):
-    """Enumerate door sorting."""
+    """Enumerate item sorting."""
 
     ID_ASC = "id"
     ID_DSC = "-id"
@@ -37,163 +39,220 @@ class SortMethod(StrEnum):
     NAME_DSC = "-name"
 
 
-@dataclass
-class FTApiFeatures:
+class FTModel(BaseModel):
+    """Base model for FTItem models."""
+
+    model_config = ConfigDict(validate_by_name=True, validate_by_alias=True)
+
+    def model_dump(self, **kwargs: Any) -> dict[str, Any]:
+        """Override BaseModel.model_dump to exclude unset and None values by default."""
+        return super().model_dump(
+            **kwargs, mode="json", by_alias=True, exclude_unset=True, exclude_none=True
+        )
+
+
+class FTCommandsBase(FTModel):
+    """Base class for command objects.
+
+    Normalizes API responses where commands may be disabled. The API can
+    return:
+      - an object like {"disabled": "Not available"}
+      - a dict of command names -> command refs
+
+    If any command is disabled (either form) we treat the whole commands
+    object as unavailable and return None so fields typed
+    `Optional[FTCommandsBase]` become None.
+    """
+
+    @model_validator(mode="before")
+    @classmethod
+    def _commands_disabled_to_none(cls, values: dict[str, Any]) -> Any:
+        """Guard against disabled commands."""
+        # If it's a dict of commands, and any command is disabled, return None
+        new_values = values.copy()
+        for k, v in values.items():
+            if isinstance(v, dict) and "disabled" in v:
+                new_values[k] = None
+        return new_values
+
+
+class Feature:
+    """
+    A wrapper around a dictionary of feature details.
+    """
+
+    def __init__(self, name: str, features: dict[str, Any]) -> None:
+        self._name = name
+        self._features = features
+
+    def _href(self, sub_feature: str | None = None) -> str:
+        """
+        Return href for a sub_feature. If no sub_feature is provided,
+        the href for the feature itself is returned.
+        """
+        if not self._features:
+            raise LicenseError(f"Feature '{self._name}' is not licensed.")
+
+        lookup_key = sub_feature or self._name
+
+        if not (detail := self._features.get(lookup_key)):
+            raise ValueError(
+                f"'{lookup_key}' is not a valid sub-feature of '{self._name}'"
+            )
+        return detail["href"]
+
+    def __call__(self, sub_feature: str | None = None) -> str:
+        """Allow calling the Feature instance like a function to get the href.
+
+        Example: self.api_features.items('items/itemTypes') -> href
+        """
+        return self._href(sub_feature)
+
+
+class FTApiFeatures(FTModel):
     """FTApiFeatures class."""
 
-    accessGroups: dict[str, Any] | None
-    accessZones: dict[str, Any] | None
-    alarms: dict[str, Any] | None
-    alarmZones: dict[str, Any] | None
-    cardholders: dict[str, Any] | None
-    cardTypes: dict[str, Any] | None
-    competencies: dict[str, Any] | None
-    dayCategories: dict[str, Any] | None
-    divisions: dict[str, Any] | None
-    doors: dict[str, Any] | None
-    elevators: dict[str, Any] | None
-    events: dict[str, Any] | None
-    fenceZones: dict[str, Any] | None
-    inputs: dict[str, Any] | None
-    interlockGroups: dict[str, Any] | None
-    items: dict[str, Any] | None
-    lockerBanks: dict[str, Any] | None
-    macros: dict[str, Any] | None
-    operatorGroups: dict[str, Any] | None
-    outputs: dict[str, Any] | None
-    personalDataFields: dict[str, Any] | None
-    receptions: dict[str, Any] | None
-    roles: dict[str, Any] | None
-    schedules: dict[str, Any] | None
-    visits: dict[str, Any] | None
-    lockers: dict[str, Any] | None
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    def href(self, feature: str) -> str:
-        """
-        Return href link for feature.
-        For sub_features use format main_feature/sub_feature
-        """
-        main_feature = sub_feature = ""
-        try:
-            if "/" in feature:
-                main_feature, sub_feature = feature.split("/")
-            else:
-                main_feature = feature
-        except ValueError as err:
-            raise ValueError("Incorrect syntax of feature.") from err
-        if not hasattr(self, main_feature):
-            raise ValueError(f"{main_feature} is not a valid feature")
-        if not (feature := getattr(self, main_feature)):
-            raise LicenseError(f"{main_feature} is not licensed for this site.")
-        if sub_feature and sub_feature not in feature:
-            raise ValueError(f"{sub_feature} is not found in {main_feature}")
-        return feature[sub_feature or main_feature]["href"]
+    access_groups: Feature = Field(alias="accessGroups")
+    access_zones: Feature = Field(alias="accessZones")
+    alarms: Feature = Field(alias="alarms")
+    alarm_zones: Feature = Field(alias="alarmZones")
+    cardholders: Feature = Field(alias="cardholders")
+    card_types: Feature = Field(alias="cardTypes")
+    competencies: Feature = Field(alias="competencies")
+    day_categories: Feature = Field(alias="dayCategories")
+    divisions: Feature = Field(alias="divisions")
+    doors: Feature = Field(alias="doors")
+    elevators: Feature = Field(alias="elevators")
+    events: Feature = Field(alias="events")
+    fence_zones: Feature = Field(alias="fenceZones")
+    inputs: Feature = Field(alias="inputs")
+    interlock_groups: Feature = Field(alias="interlockGroups")
+    items: Feature = Field(alias="items")
+    locker_banks: Feature = Field(alias="lockerBanks")
+    macros: Feature = Field(alias="macros")
+    operator_groups: Feature = Field(alias="operatorGroups")
+    outputs: Feature = Field(alias="outputs")
+    personal_data_fields: Feature = Field(alias="personalDataFields")
+    receptions: Feature = Field(alias="receptions")
+    roles: Feature = Field(alias="roles")
+    schedules: Feature = Field(alias="schedules")
+    visits: Feature = Field(alias="visits")
+    lockers: Feature = Field(alias="lockers")
 
+    @model_validator(mode="before")
     @classmethod
-    def from_dict(cls, kwargs: dict[str, Any]) -> FTApiFeatures:
-        """Return FTApiFeatures object from dict."""
-        return from_dict(data_class=FTApiFeatures, data=kwargs)
+    def _wrap_features(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """
+        Convert each feature dict in values to a Feature instance.
+        """
+        wrapped_values = {}
+        # Use cls.model_fields to iterate over all declared fields
+        for field_name, field_info in cls.model_fields.items():
+            # Pydantic uses alias for mapping, so we should too.
+            alias = field_info.alias or field_name
+            wrapped_values[alias] = Feature(alias, values.get(alias, {}))
+        return wrapped_values
 
 
-@dataclass
-class FTItemReference:
+class FTItemReference(FTModel):
     """FTItem reference class."""
 
     href: str
 
 
-@dataclass
-class FTStatus:
+class FTItemIdReference(FTModel):
+    """FTItem reference class."""
+
+    href: str
+    id: str
+
+
+class FTStatus(FTModel):
     """FTStatus class."""
 
     value: str
-    type: str = ""
+    type: str | None = None
 
 
-@dataclass
-class FTItemType:
+class FTItemType(FTModel):
     """FTItemType class."""
 
     id: str
     name: str
 
 
-@dataclass
-class FTItem:
+class FTItem(FTModel):
     """FTItem class."""
 
-    id: str
-    name: str = ""
-    href: str = ""
-    type: dict = field(default_factory=dict)
-    division: dict = field(default_factory=dict)
-    extra_fields: dict = field(default_factory=dict)
+    model_config = ConfigDict(extra="allow")
 
-    @classmethod
-    def from_dict(cls, kwargs: dict[str, Any]) -> FTItem:
-        """Return FTItem object from dict."""
-        _item = from_dict(data_class=FTItem, data=kwargs)
-        cls_fields = set(f.name for f in fields(_item))
-        _item.extra_fields = {k: v for k, v in kwargs.items() if k not in cls_fields}
-        return _item
+    href: str | None = None
+    id: str | None = None
+    name: str | None = None
+    type: FTItemType | None = None
+    division: FTItemIdReference | None = None
 
 
-@dataclass
-class FTLinkItem:
+class FTLinkItem(FTModel):
     """FTLinkItem class."""
 
-    name: str
-    href: str | None
+    href: str | None = None
+    name: str | None = None
+
+
+class FTBaseItem(FTModel):
+    """Base class for all item classes."""
+
+    href: str | None = None
+    id: str | None = None
+    name: str | None = None
+    division: FTItem | None = None
+    description: str | None = None
+    short_name: str | None = Field(None, alias="shortName")
+    notes: str | None = None
+    status_flags: list[str] | None = Field(alias="statusFlags", default_factory=list)
+    updates: FTItemReference | None = None
+    connected_controller: FTItem | None = Field(None, alias="connectedController")
 
 
 # region Access zone models
 
 
-@dataclass
-class FTAccessZoneCommands:
+class FTAccessZoneCommandBody(FTModel):
+    """FTAccessZone command body class."""
+
+    end_time: datetime | None = Field(None, alias="endTime")
+    zone_count: int | None = Field(None, alias="zoneCount")
+
+
+class FTAccessZoneCommands(FTCommandsBase):
     """FTAccessZone commands base class."""
 
-    free: FTItemReference
-    freePin: FTItemReference
-    secure: FTItemReference
-    securePin: FTItemReference
-    codeOnly: FTItemReference
-    codeOnlyPin: FTItemReference
-    dualAuth: FTItemReference
-    dualAuthPin: FTItemReference
-    forgiveAntiPassback: FTItemReference | None
-    setZoneCount: FTItemReference | None
-    lockDown: FTItemReference
-    cancelLockDown: FTItemReference
-    cancel: FTItemReference
+    free: FTItemReference | None = None
+    free_pin: FTItemReference | None = Field(None, alias="freePin")
+    secure: FTItemReference | None = None
+    secure_pin: FTItemReference | None = Field(None, alias="securePin")
+    code_only: FTItemReference | None = Field(None, alias="codeOnly")
+    code_only_pin: FTItemReference | None = Field(None, alias="codeOnlyPin")
+    dual_auth: FTItemReference | None = Field(None, alias="dualAuth")
+    dual_auth_pin: FTItemReference | None = Field(None, alias="dualAuthPin")
+    forgive_anti_passback: FTItemReference | None = Field(
+        None, alias="forgiveAntiPassback"
+    )
+    set_zone_count: FTItemReference | None = Field(None, alias="setZoneCount")
+    lock_down: FTItemReference | None = Field(None, alias="lockDown")
+    cancel_lock_down: FTItemReference | None = Field(None, alias="cancelLockDown")
+    cancel: FTItemReference | None = None
 
 
-@dataclass
-class FTAccessZone:
+class FTAccessZone(FTBaseItem):
     """FTAccessZone item base class."""
 
-    id: str
-    href: str
-    name: str
-    description: str | None
-    division: FTItem | None
-    doors: list[FTLinkItem] | None
-    zoneCount: int | None
-    notes: str | None
-    shortName: str | None
-    updates: FTItemReference | None
-    statusFlags: list[str] | None
-    connectedController: FTItem | None
-    commands: FTAccessZoneCommands | None
-
-    @classmethod
-    def from_dict(cls, kwargs: dict[str, Any]) -> FTAccessZone:
-        """Return FTAccessZone object from dict."""
-        return from_dict(
-            data_class=FTAccessZone,
-            data=kwargs,
-            config=Config(type_hooks=CONVERTERS),
-        )
+    doors: list[FTLinkItem] = Field(default_factory=list)
+    zone_count: int | None = Field(None, alias="zoneCount")
+    commands: FTAccessZoneCommands | None = None
 
 
 # endregion Access zone models
@@ -201,43 +260,28 @@ class FTAccessZone:
 # region Alarm zone models
 
 
-@dataclass
-class FTAlarmZoneCommands:
+class FTAlarmZoneCommandBody(FTModel):
+    """FTAlarmZone command body class."""
+
+    end_time: datetime | None = Field(None, alias="endTime")
+
+
+class FTAlarmZoneCommands(FTCommandsBase):
     """FTAlarmZone commands base class."""
 
-    arm: FTItemReference
-    disarm: FTItemReference
-    user1: FTItemReference
-    user2: FTItemReference
-    armHighVoltage: FTItemReference | None
-    armLowFeel: FTItemReference | None
-    cancel: FTItemReference | None
+    arm: FTItemReference | None = None
+    disarm: FTItemReference | None = None
+    user1: FTItemReference | None = None
+    user2: FTItemReference | None = None
+    arm_high_voltage: FTItemReference | None = Field(None, alias="armHighVoltage")
+    arm_low_feel: FTItemReference | None = Field(None, alias="armLowFeel")
+    cancel: FTItemReference | None = None
 
 
-@dataclass
-class FTAlarmZone:
+class FTAlarmZone(FTBaseItem):
     """FTAlarmZone item base class."""
 
-    id: str
-    href: str
-    name: str
-    description: str | None
-    division: FTItem | None
-    shortName: str | None
-    notes: str | None
-    updates: FTItemReference | None
-    statusFlags: list[str] | None
-    connectedController: FTItem | None
-    commands: FTAlarmZoneCommands | None
-
-    @classmethod
-    def from_dict(cls, kwargs: dict[str, Any]) -> FTAlarmZone:
-        """Return FTAlarmZone object from dict."""
-        return from_dict(
-            data_class=FTAlarmZone,
-            data=kwargs,
-            config=Config(type_hooks=CONVERTERS),
-        )
+    commands: FTAlarmZoneCommands | None = None
 
 
 # endregion Alarm zone models
@@ -245,241 +289,138 @@ class FTAlarmZone:
 # region Fence zone models
 
 
-@dataclass
-class FTFenceZoneCommands:
+class FTFenceZoneCommands(FTCommandsBase):
     """FTFenceZone commands base class."""
 
-    on: FTItemReference
-    off: FTItemReference
-    shunt: FTItemReference
-    unshunt: FTItemReference
-    highVoltage: FTItemReference
-    lowFeel: FTItemReference
-    cancel: FTItemReference
+    on: FTItemReference | None = None
+    off: FTItemReference | None = None
+    shunt: FTItemReference | None = None
+    unshunt: FTItemReference | None = None
+    high_voltage: FTItemReference | None = Field(None, alias="highVoltage")
+    low_feel: FTItemReference | None = Field(None, alias="lowFeel")
+    cancel: FTItemReference | None = None
 
 
-@dataclass
-class FTFenceZone:
+class FTFenceZone(FTBaseItem):
     """FTFenceZone item base class."""
 
-    id: str
-    href: str
-    name: str
-    description: str | None
-    division: FTItem | None
-    voltage: int | None
-    shortName: str | None
-    notes: str | None
-    updates: FTItemReference | None
-    statusFlags: list[str] | None
-    connectedController: FTItem | None
-    commands: FTFenceZoneCommands | None
-
-    @classmethod
-    def from_dict(cls, kwargs: dict[str, Any]) -> FTFenceZone:
-        """Return FTAlarmZone object from dict."""
-        return from_dict(
-            data_class=FTFenceZone,
-            data=kwargs,
-            config=Config(type_hooks=CONVERTERS),
-        )
+    voltage: int | None = None
+    commands: FTFenceZoneCommands | None = None
 
 
 # endregion Fence zone models
 
 
-# region Input models
-@dataclass
-class FTInputCommands:
+# region Input/Output models
+class FTInputCommands(FTCommandsBase):
     """FTInput commands base class."""
 
-    shunt: FTItemReference
-    unshunt: FTItemReference
-    isolate: FTItemReference | None
-    deisolate: FTItemReference | None
+    shunt: FTItemReference | None = None
+    unshunt: FTItemReference | None = None
+    isolate: FTItemReference | None = None
+    deisolate: FTItemReference | None = None
 
 
-@dataclass
-class FTInput:
-    """FTInput item base class."""
+class FTOutputCommandBody(FTModel):
+    """FTOutput command body class."""
 
-    id: str
-    href: str
-    name: str
-    description: str | None
-    division: FTItem | None
-    shortName: str | None
-    notes: str | None
-    updates: FTItemReference | None
-    statusFlags: list[str] | None
-    connectedController: FTItem | None
-    commands: FTInputCommands | None
-
-    @classmethod
-    def from_dict(cls, kwargs: dict[str, Any]) -> FTInput:
-        """Return FTInput object from dict."""
-        return from_dict(
-            data_class=FTInput,
-            data=kwargs,
-            config=Config(type_hooks=CONVERTERS),
-        )
+    end_time: datetime | None = Field(None, alias="endTime")
 
 
-# endregion Input models
-
-
-# region Output models
-@dataclass
-class FTOutputCommands:
+class FTOutputCommands(FTCommandsBase):
     """FTOutput commands base class."""
 
-    on: FTItemReference
-    off: FTItemReference
-    pulse: FTItemReference | None
-    cancel: FTItemReference
+    on: FTItemReference | None = None
+    off: FTItemReference | None = None
+    pulse: FTItemReference | None = None
+    cancel: FTItemReference | None = None
 
 
-@dataclass
-class FTOutput:
-    """FTOutput item base class."""
+class FTInput(FTBaseItem):
+    """FTInput item class."""
 
-    id: str
-    href: str
-    name: str
-    description: str | None
-    division: FTItem | None
-    shortName: str | None
-    notes: str | None
-    updates: FTItemReference | None
-    statusFlags: list[str] | None
-    connectedController: FTItem | None
-    commands: FTOutputCommands | None
-
-    @classmethod
-    def from_dict(cls, kwargs: dict[str, Any]) -> FTOutput:
-        """Return FTOutput object from dict."""
-        return from_dict(
-            data_class=FTOutput,
-            data=kwargs,
-            config=Config(type_hooks=CONVERTERS),
-        )
+    commands: FTInputCommands | None = None
 
 
-# endregion Output models
+class FTOutput(FTBaseItem):
+    """FTOutput item class."""
+
+    commands: FTOutputCommands | None = None
+
+
+# endregion Inputs/Output models
 
 # region Access groups models
 
 
-@dataclass
-class FTAccessGroup:
+class FTAccessGroupAccessZone(FTModel):
+    """Access zone assigned to the access group."""
+
+    access_zone: FTLinkItem = Field(alias="accessZone")
+    schedule: FTLinkItem
+
+
+class FTAccessGroupAlarmZone(FTModel):
+    """Alarm zone assigned to the access group."""
+
+    alarm_zone: FTLinkItem = Field(alias="alarmZone")
+
+
+class FTAccessGroup(FTModel):
     """FTAccessGroup item base class."""
 
-    id: str
-    href: str
-    name: str
-    description: str | None
-    parent: FTLinkItem | None
-    division: FTItem | None
-    cardholders: FTItemReference | None
-    serverDisplayName: str | None
-    children: list[FTLinkItem] | None
-    personalDataDefinitions: list[FTLinkItem] | None
-    visitor: bool | None
-    escortVisitors: bool | None
-    lockUnlockAccessZones: bool | None
-    enterDuringLockdown: bool | None
-    firstCardUnlock: bool | None
-    overrideAperioPrivacy: bool | None
-    aperioOfflineAccess: bool | None
-    disarmAlarmZones: bool | None
-    armAlarmZones: bool | None
-    hvLfFenceZones: bool | None
-    viewAlarms: bool | None
-    shunt: bool | None
-    lockOutFenceZones: bool | None
-    cancelFenceZoneLockout: bool | None
-    ackAll: bool | None
-    ackBelowHigh: bool | None
-    selectAlarmZone: bool | None
-    armWhileAlarm: bool | None
-    armWhileActiveAlarm: bool | None
-    isolateAlarmZones: bool | None
-    access: list[FTLinkItem] | None
-    alarmZones: list[FTLinkItem] | None
+    href: str | None = None
+    id: str | None = None
+    name: str | None = None
+    description: str | None = None
+    division: FTItem | None = None
+    parent: FTLinkItem | None = None
+    cardholders: FTItemReference | None = None
+    server_display_name: str | None = Field(None, alias="serverDisplayName")
+    children: list[FTLinkItem] = Field(default_factory=list)
+    personal_data_definitions: list[FTLinkItem] = Field(
+        alias="personalDataDefinitions", default_factory=list
+    )
+    visitor: bool | None = None
+    escort_visitors: bool | None = Field(None, alias="escortVisitors")
+    lock_unlock_access_zones: bool | None = Field(None, alias="lockUnlockAccessZones")
+    enter_during_lockdown: bool | None = Field(None, alias="enterDuringLockdown")
+    first_card_unlock: bool | None = Field(None, alias="firstCardUnlock")
+    override_aperio_privacy: bool | None = Field(None, alias="overrideAperioPrivacy")
+    aperio_offline_access: bool | None = Field(None, alias="aperioOfflineAccess")
+    disarm_alarm_zones: bool | None = Field(None, alias="disarmAlarmZones")
+    arm_alarm_zones: bool | None = Field(None, alias="armAlarmZones")
+    hv_lf_fence_zones: bool | None = Field(None, alias="hvLfFenceZones")
+    view_alarms: bool | None = Field(None, alias="viewAlarms")
+    shunt: bool | None = Field(None, alias="shunt")
+    lock_out_fence_zones: bool | None = Field(None, alias="lockOutFenceZones")
+    cancel_fence_zone_lockout: bool | None = Field(None, alias="cancelFenceZoneLockout")
+    ack_all: bool | None = Field(None, alias="ackAll")
+    ack_below_high: bool | None = Field(None, alias="ackBelowHigh")
+    select_alarm_zone: bool | None = Field(None, alias="selectAlarmZone")
+    arm_while_alarm: bool | None = Field(None, alias="armWhileAlarm")
+    arm_while_active_alarm: bool | None = Field(None, alias="armWhileActiveAlarm")
+    isolate_alarm_zones: bool | None = Field(None, alias="isolateAlarmZones")
+    access: list[FTAccessGroupAccessZone] | None = Field(
+        None, description="list of access zones assigned to the access group"
+    )
+    alarm_zones: list[FTAccessGroupAlarmZone] | None = Field(
+        None, description="Alarm zones", alias="alarmZones"
+    )
 
-    @classmethod
-    def from_dict(cls, kwargs: dict[str, Any]) -> FTAccessGroup:
-        """Return FTAccessGroup object from dict."""
-        return from_dict(data_class=FTAccessGroup, data=kwargs)
 
+class FTAccessGroupMembership(FTModel):
+    """FTAccessGroupMembership base class.
 
-@dataclass
-class FTAccessGroupMembership:
-    """FTAccessGroupMembership base class."""
+    To add a new membership construct the class with accessGroup and keep href None.
+    To update an existing membership, construct the class with href without accessGroup
+    """
 
-    href: str | None
-    status: FTStatus | None
-    accessGroup: FTLinkItem | None
-    active_from: datetime | None
-    active_until: datetime | None
-
-    @property
-    def to_dict(self) -> dict[str, Any]:
-        """Return json string for post and update."""
-        _dict: dict[str, Any] = {}
-        if self.href:
-            _dict["href"] = self.href
-        if self.accessGroup:
-            _dict["accessGroup"] = {"href": self.accessGroup.href}
-        if self.active_from:
-            _dict["from"] = f"{self.active_from.isoformat()}Z"
-        if self.active_until:
-            _dict["until"] = f"{self.active_until.isoformat()}Z"
-        return _dict
-
-    @classmethod
-    def add_membership(
-        cls,
-        access_group: FTAccessGroup,
-        active_from: datetime | None = None,
-        active_until: datetime | None = None,
-    ) -> FTAccessGroupMembership:
-        """Create an FTAccessGroup item to assign."""
-        kwargs: dict[str, Any] = {
-            "accessGroup": {"name": access_group.name, "href": access_group.href}
-        }
-        if active_from:
-            kwargs["active_from"] = active_from
-        if active_until:
-            kwargs["active_until"] = active_until
-        return from_dict(FTAccessGroupMembership, kwargs)
-
-    @classmethod
-    def update_membership(
-        cls,
-        access_group_membership: FTAccessGroupMembership,
-        active_from: datetime | None = None,
-        active_until: datetime | None = None,
-    ) -> FTAccessGroupMembership:
-        """Create an FTAccessGroup update item."""
-        kwargs: dict[str, Any] = {"href": access_group_membership.href}
-        if active_from:
-            kwargs["active_from"] = active_from
-        if active_until:
-            kwargs["active_until"] = active_until
-        return from_dict(FTAccessGroupMembership, kwargs)
-
-    @classmethod
-    def from_dict(cls, kwargs: list[dict[str, Any]]) -> list[FTAccessGroupMembership]:
-        """Return FTAccessGroupMembership object from dict."""
-        return [
-            from_dict(
-                FTAccessGroupMembership,
-                access_group,
-                config=Config(type_hooks=CONVERTERS),
-            )
-            for access_group in kwargs
-        ]
+    href: str | None = None
+    status: FTStatus | None = None
+    access_group: FTAccessGroup | None = Field(None, alias="accessGroup")
+    active_from: datetime | None = Field(None, alias="from")
+    active_until: datetime | None = Field(None, alias="until")
 
 
 # endregion Access groups models
@@ -487,63 +428,47 @@ class FTAccessGroupMembership:
 # region Operator groups models
 
 
-@dataclass
-class FTOperatorGroupMembership:
+class FTOperatorGroupMembership(FTModel):
     """FTOperatorGroupMembership item base class."""
 
+    href: str | None = None
     cardholder: FTLinkItem
-    href: str | None
-
-    @classmethod
-    def from_dict(cls, kwargs: dict[str, Any]) -> FTOperatorGroupMembership:
-        """Return list of FTOperatorGroupMembership objects from dict."""
-        return from_dict(data_class=FTOperatorGroupMembership, data=kwargs)
 
 
-@dataclass
-class FTOperatorGroup:
+class FTOperatorGroup(FTModel):
     """FTOperatorGroup item base class."""
 
-    href: str
-    name: str
-    description: str | None
-    division: FTItem | None
-    cardholders: FTItemReference | None
-    serverDisplayName: str | None
-    divisions: list[dict[str, FTLinkItem]] | None
-
-    @classmethod
-    def from_dict(cls, kwargs: dict[str, Any]) -> FTOperatorGroup:
-        """Return FTOperatorGroup object from dict."""
-        return from_dict(data_class=FTOperatorGroup, data=kwargs)
+    href: str | None = None
+    name: str | None = None
+    description: str | None = None
+    division: FTItem | None = None
+    cardholders: FTItemReference | None = None
+    server_display_name: str | None = Field(None, alias="serverDisplayName")
+    divisions: list[dict[str, FTLinkItem]] = Field(default_factory=list)
 
 
 # endregion Operator groups models
 
 
 # region Card type models
-@dataclass
-class FTCardType:
+class FTCardType(FTModel):
     """FTCardType item base class."""
 
-    href: str
-    id: str
-    name: str
-    division: FTItem | None
-    notes: str | None
-    facilityCode: str
-    availableCardStates: list[str] | None
-    credentialClass: str | None
-    minimumNumber: str | None
-    maximumNumber: str | None
-    serverDisplayName: str | None
-    regex: str | None
-    regexDescription: str | None
-
-    @classmethod
-    def from_dict(cls, kwargs: dict[str, Any]) -> FTCardType:
-        """Return FTCardType object from dict."""
-        return from_dict(data_class=FTCardType, data=kwargs)
+    href: str | None = None
+    id: str | None = None
+    name: str | None = None
+    division: FTItem | None = None
+    notes: str | None = None
+    facility_code: str | None = Field(None, alias="facilityCode")
+    available_card_states: list[str] | None = Field(
+        alias="availableCardStates", default_factory=list
+    )
+    credential_class: str | None = Field(None, alias="credentialClass")
+    minimum_number: str | None = Field(None, alias="minimumNumber")
+    maximum_number: str | None = Field(None, alias="maximumNumber")
+    server_display_name: str | None = Field(None, alias="serverDisplayName")
+    regex: str | None = Field(None, alias="regex")
+    regex_description: str | None = Field(None, alias="regexDescription")
 
 
 # endregion Card type models
@@ -551,65 +476,22 @@ class FTCardType:
 # region Cardholder card models
 
 
-@dataclass
-class FTCardholderCard:
+class FTCardholderCard(FTModel):
     """FTCardholder card base class."""
 
-    type: FTLinkItem | FTItemReference
-    href: str | None
-    number: str | None
-    cardSerialNumber: str | None
-    issueLevel: int | None
-    status: FTStatus | None
-    from_: datetime | None
-    until: datetime | None
-
-    @property
-    def to_dict(self) -> dict[str, Any]:
-        """Return json string for post and update."""
-        _dict: dict[str, Any] = {"type": {"href": self.type.href}}
-        if self.href:
-            _dict["href"] = self.href
-        if self.number:
-            _dict["number"] = self.number
-        if self.issueLevel:
-            _dict["issueLevel"] = self.issueLevel
-        if self.from_:
-            _dict["from"] = f"{self.from_.isoformat()}Z"
-        if self.until:
-            _dict["until"] = f"{self.until.isoformat()}Z"
-        if self.status:
-            _dict["status"] = self.status
-        return _dict
-
-    @classmethod
-    def create_card(
-        cls,
-        card_type_href: str,
-        number: str = "",
-        issueLevel: int | None = None,
-        active_from: datetime | None = None,
-        active_until: datetime | None = None,
-    ) -> FTCardholderCard:
-        """Create an FTCardholder card object."""
-        kwargs: dict[str, Any] = {"type": {"href": card_type_href}}
-        if number:
-            kwargs["number"] = number
-        if issueLevel:
-            kwargs["issueLevel"] = issueLevel
-        if active_from:
-            kwargs["from_"] = active_from
-        if active_until:
-            kwargs["until"] = active_until
-        return from_dict(FTCardholderCard, kwargs)
-
-    @classmethod
-    def from_dict(cls, kwargs: list[dict[str, Any]]) -> list[FTCardholderCard]:
-        """Return FTCardholderCard object from dict."""
-        return [
-            from_dict(FTCardholderCard, card, config=Config(type_hooks=CONVERTERS))
-            for card in kwargs
-        ]
+    href: str | None = None
+    number: str | None = None
+    card_serial_number: str | None = Field(None, alias="cardSerialNumber")
+    issue_level: int | None = Field(None, alias="issueLevel")
+    status: FTStatus | None = None
+    type: FTLinkItem
+    # invitation: TODO Add invitation model
+    active_from: datetime | None = Field(None, alias="from")
+    active_until: datetime | None = Field(None, alias="until")
+    credentialClass: str | None = None
+    trace: bool | None = None
+    last_used_time: datetime | None = Field(None, alias="lastUsedTime")
+    # pin TODO add pin field
 
 
 # endregion Cardholder card models
@@ -631,44 +513,104 @@ class PDFType(StrEnum):
     MOBILE = "mobile"
 
 
-@dataclass
-class FTPersonalDataFieldDefinition:
+class FTPersonalDataFieldDefinition(FTModel):
     """FTPersonalDataFieldDefinition class."""
 
-    id: str
-    href: str
-    name: str
-    serverDisplayName: str | None
-    description: str | None
-    type: PDFType | None
-    division: FTItem | None
-    default: str | None
-    defaultAccess: str | None
-    operatorAccess: str | None
-    sortPriority: int | None
-    accessGroups: list[FTLinkItem] | None
-    regex: str | None
-    regexDescription: str | None
-    contentType: str | None
-    isProfileImage: bool | None
-    required: bool | None
-    unique: bool | None
-    strEnumList: list[str] | None
-
-    @classmethod
-    def from_dict(cls, kwargs: dict[str, Any]) -> FTPersonalDataFieldDefinition:
-        """Return FTPersonalDataFieldDefinition object from dict."""
-        return from_dict(
-            FTPersonalDataFieldDefinition, kwargs, config=Config(cast=[PDFType])
-        )
+    href: str | None = None
+    id: str | None = None
+    name: str | None = None
+    server_display_name: str | None = Field(None, alias="serverDisplayName")
+    description: str | None = None
+    type: PDFType | None = None
+    division: FTItem | None = None
+    default: str | None = None
+    default_access: str | None = Field(None, alias="defaultAccess")
+    operator_access: str | None = Field(None, alias="operatorAccess")
+    sort_priority: int | None = Field(None, alias="sortPriority")
+    access_groups: list[FTLinkItem] = Field(alias="accessGroups", default_factory=list)
+    regex: str | None = None
+    regex_description: str | None = Field(None, alias="regexDescription")
+    content_type: str | None = Field(None, alias="contentType")
+    is_profile_image: bool | None = Field(None, alias="isProfileImage")
+    required: bool | None = Field(None, alias="required")
+    unique: bool | None = Field(None, alias="unique")
+    str_enum_list: list[str] = Field(alias="strEnumList", default_factory=list)
 
 
 # endregion pdf definition models
 
 
+# region Lockers models
+class FTLockerCommands(FTCommandsBase):
+    """FTLocker commands base class."""
+
+    open: FTItemReference
+    quarantine: FTItemReference
+    quarantine_until: FTItemReference | None = Field(None, alias="quarantineUntil")
+    cancel_quarantine: FTItemReference | None = Field(None, alias="cancelQuarantine")
+
+
+class LockerAssignment(FTModel):
+    """Locker assignment class."""
+
+    href: str
+    cardholder: FTLinkItem
+    active_from: datetime | None = Field(None, alias="from")
+    active_until: datetime | None = Field(None, alias="until")
+
+
+class FTLockerMembership(FTModel):
+    """Locker membership class."""
+
+    href: str | None = None
+    locker: FTLocker | None = None
+    active_from: datetime | None = Field(None, alias="from")
+    active_until: datetime | None = Field(None, alias="until")
+
+
+class FTLocker(FTModel):
+    """Locker class."""
+
+    href: str
+    name: str
+    short_name: str | None = Field(None, alias="shortName")
+    locker_bank: FTLinkItem | None = Field(None, alias="lockerBank")
+    assignments: list[LockerAssignment] | None = None
+    commands: FTLockerCommands | None = None
+    updates: FTItemReference | None = Field(None, exclude=True)
+
+
+class FTLockerBank(FTBaseItem):
+    """Locker Bank class."""
+
+    lockers: list[FTLocker] | None = None
+
+
+# endregion Lockers models
+
+
+# region Elevator groups models
+
+
+class ElevatorGroups(FTModel):
+    """Cardholder elevator group assignment class."""
+
+    href: str
+    elevator_group: FTLinkItem = Field(alias="elevatorGroup")
+    access_zone: FTLinkItem = Field(alias="accessZone")
+    enable_capture_features: bool = Field(alias="enableCaptureFeatures")
+    enable_code_blue_features: bool = Field(alias="enableCodeBlueFeatures")
+    enable_express_features: bool = Field(alias="enableExpressFeatures")
+    enable_service_features: bool = Field(alias="enableServiceFeatures")
+    enable_service2_features: bool = Field(alias="enableService2Features")
+    enable_service3_features: bool = Field(alias="enableService3Features")
+
+
+# endregion Elevator groups models
+
+
 # region Cardholder models
-@dataclass
-class FTCardholderPdfDefinition:
+class FTCardholderPdfDefinition(FTModel):
     """FTCardholderPdfDefinition class."""
 
     id: str
@@ -677,188 +619,151 @@ class FTCardholderPdfDefinition:
     type: str
 
 
-@dataclass
-class FTCardholderPdfValue:
+class FTCardholderPdfValue(FTModel):
     """FTCardholderPdfValue class."""
 
-    name: str
-    href: str | None
-    definition: FTCardholderPdfDefinition | None
-    value: int | str | FTItemReference | None
-    notifications: bool | None
-
-    @property
-    def to_dict(self) -> dict[str, Any]:
-        """Return json string for post and update."""
-        return {f"@{self.name}": {"notifications": self.notifications}}
-
-    @classmethod
-    def create_pdf(
-        cls,
-        pdf_definition: FTPersonalDataFieldDefinition,
-        value: str,
-        enable_notification: bool = False,
-    ) -> FTCardholderPdfValue:
-        """Create FTCardholderPdfValue object for POST."""
-        kwargs: dict[str, Any] = {"name": pdf_definition.name}
-        kwargs["value"] = value
-        kwargs["notifications"] = enable_notification
-        return from_dict(FTCardholderPdfValue, kwargs)
-
-    @classmethod
-    def from_dict(
-        cls, kwargs: list[dict[str, dict[str, Any]]]
-    ) -> list[dict[str, FTCardholderPdfValue]]:
-        """Return FTCardholderPdfValue object from dict."""
-        pdf_values: list[dict[str, FTCardholderPdfValue]] = []
-        for pdf in kwargs:
-            for name, info in pdf.items():
-                name = name[1:]
-                pdf_value = from_dict(FTCardholderPdfValue, {"name": name, **info})
-                pdf_values.append({name: pdf_value})
-        return pdf_values
+    href: str | None = None
+    definition: FTCardholderPdfDefinition | None = None
+    value: int | str | FTItemReference | None = None
+    notifications: bool | None = None
 
 
-@dataclass
-class FTCardholder:
+class FTCardholderCardsPatch(FTModel):
+    """Patch section for FTCardholder.cards."""
+
+    add: list[FTCardholderCard] | None = None
+    update: list[FTCardholderCard] | None = None
+    remove: list[FTCardholderCard] | None = None
+
+
+class FTCardholderAccessGroupsPatch(BaseModel):
+    """Patch section for FTCardholder.accessGroups."""
+
+    add: list[FTAccessGroupMembership] | None = Field(default_factory=list)
+    update: list[FTAccessGroupMembership] | None = Field(default_factory=list)
+    remove: list[FTAccessGroupMembership] | None = Field(default_factory=list)
+
+
+class FTCardholderLockersPatch(FTModel):
+    """Patch section for FTCardholder.lockers."""
+
+    add: list[FTLockerMembership] | None = None
+    update: list[FTLockerMembership] | None = None
+    remove: list[FTLockerMembership] | None = None
+
+
+class FTCardholder(FTModel):
     """FTCardholder details class."""
 
-    href: str | None
-    id: str | None
-    division: FTItemReference | None
-    name: str | None
-    firstName: str | None
-    lastName: str | None
-    shortName: str | None
-    description: str | None
-    lastSuccessfulAccessTime: datetime | None
-    lastSuccessfulAccessZone: FTLinkItem | None
-    serverDisplayName: str | None
-    disableCipherPad: bool | None
-    usercode: str | None
-    operatorUsername: str | None
-    operatorPassword: str | None
-    windowsUsername: str | None
-    personalDataDefinitions: list[dict[str, FTCardholderPdfValue]] | None
-    cards: list[FTCardholderCard] | dict[str, list[FTCardholderCard]] | None
-    accessGroups: (
-        list[FTAccessGroupMembership] | dict[str, list[FTAccessGroupMembership]] | None
+    href: str | None = None
+    id: str | None = None
+    division: FTItem | None = None
+    notes: str | None = None
+    first_name: str | None = Field(None, alias="firstName")
+    last_name: str | None = Field(None, alias="lastName")
+    short_name: str | None = Field(None, alias="shortName")
+    description: str | None = Field(None, alias="description")
+    last_successful_access_time: datetime | None = Field(
+        None, alias="lastSuccessfulAccessTime"
     )
+    last_successful_access_zone: FTLinkItem | None = Field(
+        None, alias="lastSuccessfulAccessZone"
+    )
+    server_display_name: str | None = Field(None, alias="serverDisplayName")
+    disable_cipher_pad: bool | None = Field(None, alias="disableCipherPad")
+    user_code: str | None = Field(None, alias="usercode")
+    operator_username: str | None = Field(None, alias="operatorUsername")
+    operator_password: str | None = Field(None, alias="operatorPassword")
+    windows_username: str | None = Field(None, alias="windowsUsername")
+
+    # for POST or PATCH the dict str value should start with @,
+    # the value is "notifications": true/false
+    personal_data_definitions: list[dict[str, FTCardholderPdfValue]] | None = Field(
+        None, alias="personalDataDefinitions"
+    )
+    cards: list[FTCardholderCard] | FTCardholderCardsPatch | None = None
+    access_groups: (
+        list[FTAccessGroupMembership] | FTCardholderAccessGroupsPatch | None
+    ) = Field(None, alias="accessGroups")
     # operator_groups: str
     # competencies: str
     # edit: str
-    updateLocation: FTItemReference | None
-    notes: str | None
+    update_location: FTItemReference | None = Field(None, alias="updateLocation")
     # relationships: Any | None
-    lockers: list[FTLockerMembership] | dict[str, list[FTLockerMembership]] | None
-    elevatorGroups: Any | None
-    lastPrintedOrEncodedTime: datetime | None
-    lastPrintedOrEncodedIssueLevel: int | None
+    lockers: list[FTLockerMembership] | FTCardholderLockersPatch | None = None
+    elevator_groups: list[ElevatorGroups] | None = Field(None, alias="elevatorGroups")
+    last_printed_or_encoded_time: datetime | None = Field(
+        None, alias="lastPrintedOrEncodedTime"
+    )
+    last_printed_or_encoded_issue_level: int | None = Field(
+        None, alias="lastPrintedOrEncodedIssueLevel"
+    )
     # redactions: Any | None
-    pdfs: dict[str, str | int | FTItemReference] = field(default_factory=dict)
-    authorised: bool = False
-    operatorLoginEnabled: bool = False
-    operatorPasswordExpired: bool = False
-    useExtendedAccessTime: bool = False
-    windowsLoginEnabled: bool = False
 
-    def as_dict(self) -> dict[str, Any]:
-        """Return serialized str."""
-        _dict: dict[str, Any] = {
-            key: value
-            for key, value in self.__dict__.items()
-            if key != "pdfs" and value is not None
-        }
-        if self.pdfs:
-            _dict.update({f"@{name}": value for name, value in self.pdfs.items()})
-        return json.loads(json.dumps(_dict, default=json_serializer))
+    # pdfs is constructed internally and must not be populated from JSON input
+    pdfs: dict[str, str | int | FTItemReference] = Field(default_factory=dict)
 
-    @classmethod
-    def from_dict(cls, kwargs: dict[str, Any]) -> FTCardholder:
-        """Return FTCardholder object from dict."""
-        cardholder = from_dict(
-            FTCardholder, kwargs, config=Config(type_hooks=CONVERTERS)
-        )
-        for cardholder_pdf, value in list(kwargs.items()):
-            if cardholder_pdf.startswith("@"):
-                value = FTItemReference(**value) if isinstance(value, dict) else value
-                cardholder.pdfs[cardholder_pdf[1:]] = value
-
-        return cardholder
-
-
-@dataclass
-class FTNewCardholder:
-    """FTNewCardholder object class."""
-
-    division: FTItemReference | None = None
-    firstName: str | None = None
-    lastName: str | None = None
-    shortName: str | None = None
-    description: str | None = None
-    usercode: str | None = None
-    operatorUsername: str | None = None
-    operatorPassword: str | None = None
-    windowsUsername: str | None = None
-    personalDataDefinitions: list[dict[str, FTCardholderPdfValue]] | None = None
-    cards: list[FTCardholderCard] | dict[str, list[FTCardholderCard]] | None = field(
-        default_factory=dict
-    )
-    accessGroups: (
-        list[FTAccessGroupMembership] | dict[str, list[FTAccessGroupMembership]] | None
-    ) = field(default_factory=dict)
-    notes: str | None = None
-    lockers: list[FTLockerMembership] | dict[str, list[FTLockerMembership]] | None = (
-        field(default_factory=dict)
-    )
-    elevatorGroups: Any | None = None
-    pdfs: dict[str, Any] = field(default_factory=dict)
     authorised: bool | None = None
-    operatorLoginEnabled: bool | None = None
-    operatorPasswordExpired: bool | None = None
-    windowsLoginEnabled: bool | None = None
+    operator_login_enabled: bool | None = Field(None, alias="operatorLoginEnabled")
+    operator_password_expired: bool | None = Field(
+        None, alias="operatorPasswordExpired"
+    )
+    use_extended_access_time: bool | None = Field(None, alias="useExtendedAccessTime")
+    windows_login_enabled: bool | None = Field(None, alias="windowsLoginEnabled")
 
-    def as_dict(self) -> dict[str, Any]:
-        """Return serialized str."""
-        _dict: dict[str, Any] = {
-            key: value
-            for key, value in self.__dict__.items()
-            if key != "pdfs" and value is not None
-        }
-        if self.pdfs:
-            _dict.update({f"@{name}": value for name, value in self.pdfs.items()})
-        return json.loads(json.dumps(_dict, default=json_serializer))
+    def model_dump(self, **kwargs) -> Any:
+        """Ensure private PDFs are included when serializing via model_dump.
 
+        We call the parent model_dump then inject any entries from the
+        private `_pdfs` attribute as keys prefixed with '@'. Nested
+        FTModel instances are serialized via their own model_dump.
+        """
+        raw = super().model_dump(**kwargs)
+        raw.update({f"@{name}": value for name, value in self.pdfs.items()})
+
+        return raw
+
+    @model_validator(mode="before")
     @classmethod
-    def patch(
-        cls,
-        add: list[FTCardholderCard | FTAccessGroupMembership | FTLockerMembership]
-        | None = None,
-        update: list[FTCardholderCard | FTAccessGroupMembership | FTLockerMembership]
-        | None = None,
-        remove: list[FTCardholderCard | FTAccessGroupMembership | FTLockerMembership]
-        | None = None,
-        **kwargs: Any,
-    ) -> FTNewCardholder:
-        """Return FTCardholder object from dict."""
-        _cls = FTNewCardholder()
-        attr_class = {
-            "FTCardholderCard": "cards",
-            "FTAccessGroupMembership": "accessGroups",
-            "FTLockerMembership": "lockers",
-        }
-        for action, items in {"add": add, "update": update, "remove": remove}.items():
-            for item in items or []:
-                if (item_type := type(item).__name__) not in attr_class:
-                    continue
-                getattr(_cls, attr_class[item_type]).setdefault(action, []).append(item)
+    def _parse_pdf_values(cls, values: dict[str, Any]) -> dict[str, Any]:
+        """Extract pdf values and store then in pdf attribute."""
+        for key in list(values.keys()):
+            if key.startswith("@"):
+                value = values.pop(key)
+                value = (
+                    FTItemReference.model_validate(value)
+                    if isinstance(value, dict)
+                    else value
+                )
+                values.setdefault("pdfs", {})[key[1:]] = value
 
-        for key, value in kwargs.items():
-            try:
-                setattr(_cls, key, value)
-            except AttributeError:
-                continue
-        return _cls
+        return values
+
+
+class FTNewCardholder(FTCardholder):
+    """FTCardholder model for adding new cardholders.
+
+    Requires at least one name field (first_name or last_name) and division.
+    """
+
+    division: FTItem  # Required for POST
+
+    @model_validator(mode="after")
+    def _validate_name_required(self) -> FTNewCardholder:
+        """Ensure at least first_name or last_name is provided."""
+        if not self.first_name and not self.last_name:
+            raise ValueError(
+                "At least one of 'first_name' or 'last_name' must be provided"
+            )
+        return self
+
+
+class FTCardholderPatch(FTCardholder):
+    """FTCardholder model for patching existing cardholders."""
+
+    cards: FTCardholderCardsPatch | None = None
+    access_groups: FTCardholderAccessGroupsPatch | None = None
+    lockers: FTCardholderLockersPatch | None = None
 
 
 class CardholderChangeType(StrEnum):
@@ -869,25 +774,16 @@ class CardholderChangeType(StrEnum):
     REMOVE = "remove"
 
 
-@dataclass
-class CardholderChange:
+class CardholderChange(FTModel):
     """Cardholder changes object class."""
 
-    time: datetime | None
-    type: CardholderChangeType | None
-    item: FTItemReference | None
-    oldValues: dict[str, Any] | None
-    newValues: dict[str, Any] | None
-    cardholder: FTCardholder | None
-
-    @classmethod
-    def from_dict(cls, kwargs: dict[str, Any]) -> CardholderChange:
-        """Return list of cardholder changes object from json."""
-        return from_dict(
-            CardholderChange,
-            kwargs,
-            config=Config(cast=[CardholderChangeType], type_hooks=CONVERTERS),
-        )
+    time: datetime | None = None
+    operator: FTLinkItem | None = None
+    type: CardholderChangeType | None = None
+    item: FTItemReference | None = None
+    old_values: dict[str, Any] | None = Field(None, alias="oldValues")
+    new_values: dict[str, Any] | None = Field(None, alias="newValues")
+    cardholder: FTCardholder | None = None
 
 
 # endregion Cardholder models
@@ -904,45 +800,39 @@ class FTAlarmState(StrEnum):
     PROCESSED = "processed"
 
 
-@dataclass
-class FTEventAlarm:
+class FTEventAlarm(FTModel):
     """FTAlarm summary class"""
 
+    href: str | None = None
     state: FTAlarmState
-    href: str = ""
 
 
-@dataclass
-class FTEventCard:
+class FTEventCard(FTModel):
     """Event card details."""
 
     number: str
-    issueLevel: int
-    facilityCode: str
-
-    @classmethod
-    def from_dict(cls, kwargs: dict[str, Any]) -> FTEventCard:
-        """Return Event card object from dict."""
-        return from_dict(FTEventCard, kwargs)
+    issue_level: int = Field(alias="issueLevel")
+    facility_code: str = Field(alias="facilityCode")
 
 
-@dataclass
-class FTEventGroup:
+class FTEventType(FTModel):
+    """FTEvent type class."""
+
+    id: str
+    name: str
+    href: str
+
+
+class FTEventGroup(FTModel):
     """FTEvent group class."""
 
     id: str
     name: str
     href: str
-    eventTypes: list[FTItem]
-
-    @classmethod
-    def from_dict(cls, kwargs: dict[str, Any]) -> FTEventGroup:
-        """Return Event card object from dict."""
-        return from_dict(FTEventGroup, kwargs)
+    event_types: list[FTEventType] = Field(alias="eventTypes")
 
 
-@dataclass
-class EventField:
+class EventField(FTModel):
     """Class to represent Event field."""
 
     key: str
@@ -950,8 +840,7 @@ class EventField:
     value: Callable[[Any], Any] = lambda val: val
 
 
-@dataclass
-class FTEventBase:
+class FTEventBase(FTModel):
     """FTEventBase class."""
 
     href: str
@@ -960,111 +849,59 @@ class FTEventBase:
     message: str
     source: FTItem
     type: FTItemType | str
-    eventType: FTItemType | None
+    event_type: FTItemType | None = Field(None, alias="eventType")
     priority: int
-    division: FTItem | None
+    division: FTItem | None = None
 
 
-@dataclass
 class FTAlarm(FTEventBase):
     """FTAlarm class."""
 
     state: FTAlarmState
     active: bool
-    event: FTItemReference | None
-    notePresets: list[str] | None
+    event: FTItemReference | None = None
+    note_presets: list[str] | None = Field(None, alias="notePresets")
     view: FTItemReference
     comment: FTItemReference
-    acknowledge: FTItemReference | None
-    acknowledgeWithComment: FTItemReference | None
-    process: FTItemReference | None
-    processWithComment: FTItemReference | None
-    forceProcess: FTItemReference | None
-
-    @classmethod
-    def from_dict(cls, kwargs: dict[str, Any]) -> FTAlarm:
-        """Return FTAlarm object from dict."""
-        return from_dict(
-            FTAlarm, kwargs, config=Config(cast=[FTAlarmState], type_hooks=CONVERTERS)
-        )
+    acknowledge: FTItemReference | None = None
+    acknowledge_with_comment: FTItemReference | None = Field(
+        None, alias="acknowledgeWithComment"
+    )
+    process: FTItemReference | None = None
+    process_with_comment: FTItemReference | None = Field(
+        None, alias="processWithComment"
+    )
+    force_process: FTItemReference | None = Field(None, alias="forceProcess")
 
 
-@dataclass
 class FTEvent(FTEventBase):
     """FTEvent class."""
 
-    serverDisplayName: str | None
-    occurrences: int | None
-    alarm: FTEventAlarm | None
-    operator: FTLinkItem | None
-    group: FTItemType
-    cardholder: FTCardholder | None
-    entryAccessZone: FTItem | None
-    exitAccessZone: FTItem | None
-    door: FTLinkItem | None
-    accessGroup: FTItemReference | None
-    card: FTEventCard | None
-    lastOccurrenceTime: datetime | None
-    details: str | None
-    previous: FTItemReference | None
-    next: FTItemReference | None
-    updates: FTItemReference | None
-
-    @classmethod
-    def from_dict(cls, kwargs: dict[str, Any]) -> FTEvent:
-        """Return FTEvent object from dict."""
-        return from_dict(
-            FTEvent, kwargs, config=Config(cast=[FTAlarmState], type_hooks=CONVERTERS)
-        )
+    server_display_name: str | None = Field(None, alias="serverDisplayName")
+    occurrences: int | None = None
+    alarm: FTEventAlarm | None = None
+    operator: FTLinkItem | None = None
+    group: FTItemType | None = None
+    cardholder: FTCardholder | None = None
+    entry_access_zone: FTItem | None = Field(None, alias="entryAccessZone")
+    exit_access_zone: FTItem | None = Field(None, alias="exitAccessZone")
+    door: FTLinkItem | None = None
+    access_group: FTItemReference | None = Field(None, alias="accessGroup")
+    card: FTEventCard | None = None
+    last_occurrence_time: datetime | None = Field(None, alias="lastOccurrenceTime")
+    details: str | None = None
+    previous: FTItemReference | None = None
+    next: FTItemReference | None = None
+    updates: FTItemReference | None = None
 
 
-@dataclass
-class EventFilter:
-    """Event filter class."""
+class EventPost(FTModel):
+    """FTEvent summary class.
 
-    top: int | None = None
-    after: datetime | None = None
-    before: datetime | None = None
-    sources: list[str] | None = None
-    event_types: list[str] | None = None
-    event_groups: list[str] | None = None
-    cardholders: list[str] | None = None
-    divisions: list[str] | None = None
-    related_items: list[str] | None = None
-    fields: list[str] | None = None
-    previous: bool = False
+    Supported on version 8.90+
+    """
 
-    def as_dict(self) -> dict[str, Any]:
-        """Return event filter as dict."""
-        params: dict[str, Any] = {"previous": self.previous}
-        if self.top:
-            params["top"] = str(self.top)
-        if self.after and (after_value := self.after.isoformat()):
-            params["after"] = after_value
-        if self.before and (before_value := self.before.isoformat()):
-            params["after"] = before_value
-        if self.sources:
-            params["source"] = ",".join(self.sources)
-        if self.event_types:
-            params["type"] = ",".join(self.event_types)
-        if self.event_groups:
-            params["group"] = ",".join(self.event_groups)
-        if self.cardholders:
-            params["cardholder"] = ",".join(self.cardholders)
-        if self.divisions:
-            params["division"] = ",".join(self.divisions)
-        if self.related_items:
-            params["relatedItem"] = ",".join(self.related_items)
-        if self.fields:
-            params["fields"] = ",".join(self.fields)
-        return params
-
-
-@dataclass
-class EventPost:
-    """FTEvent summary class."""
-
-    eventType: FTItem
+    event_type: FTItem = Field(alias="eventType")
     priority: int | None = None
     time: datetime | None = None
     message: str | None = None
@@ -1072,264 +909,154 @@ class EventPost:
     source: FTItemReference | None = None
     cardholder: FTItemReference | None = None
     operator: FTItemReference | None = None
-    entryAccessZone: FTItemReference | None = None
-    accessGroup: FTItemReference | None = None
-    lockerBank: FTItemReference | None = None
+    entry_access_zone: FTItemReference | None = Field(None, alias="entryAccessZone")
+    access_group: FTItemReference | None = Field(None, alias="accessGroup")
+    locker_bank: FTItemReference | None = Field(None, alias="lockerBank")
     locker: FTItemReference | None = None
     door: FTItemReference | None = None
 
-    def as_dict(self) -> dict[str, Any]:
-        """Return a dict from Event object."""
-        _dict: dict[str, Any] = {
-            "type": {"href": self.eventType.href},
-            "eventType": {"href": self.eventType.href},
-        }
-        if self.source is not None:
-            _dict["source"] = {"href": self.source.href}
-        if self.priority is not None:
-            _dict["priority"] = self.priority
-        if self.time is not None:
-            _dict["time"] = f"{self.time.isoformat()}Z"
-        if self.message is not None:
-            _dict["message"] = self.message
-        if self.details is not None:
-            _dict["details"] = self.details
-        if self.cardholder is not None:
-            _dict["cardholder"] = {"href": self.cardholder.href}
-        if self.operator is not None:
-            _dict["operator"] = {"href": self.operator.href}
-        if self.entryAccessZone is not None:
-            _dict["entryAccessZone"] = {"href": self.entryAccessZone.href}
-        if self.lockerBank is not None:
-            _dict["lockerBank"] = {"href": self.lockerBank.href}
-        if self.locker is not None:
-            _dict["locker"] = {"href": self.locker.href}
-        if self.door is not None:
-            _dict["door"] = {"href": self.door.href}
-        return _dict
+
+class FTAlarmCommandBody(FTModel):
+    """FTAlarm command body class."""
+
+    comment: str | None = None
 
 
 # endregion Alarm and event models
 
 
 # region Door models
-@dataclass
-class FTDoorCommands:
+class FTDoorCommands(FTCommandsBase):
     """FTDoor commands base class."""
 
     open: FTItemReference
 
 
-@dataclass
-class FTDoor:
+class FTDoor(FTBaseItem):
     """FTDoor details class."""
 
-    href: str
-    id: str
-    name: str
-    description: str | None
-    division: FTItemReference | None
-    entryAccessZone: FTLinkItem | None
-    notes: str | None
-    shortName: str | None
-    updates: FTItemReference | None
-    statusFlags: list[str] | None
-    commands: FTDoorCommands | None
-    connectedController: FTItem | None
-
-    @classmethod
-    def from_dict(cls, kwargs: dict[str, Any]) -> FTDoor:
-        """Return FTDoor object from dict."""
-        return from_dict(
-            data_class=FTDoor, data=kwargs, config=Config(type_hooks=CONVERTERS)
-        )
+    entry_access_zone: FTLinkItem | None = Field(None, alias="entryAccessZone")
+    commands: FTDoorCommands | None = None
 
 
 # endregion Door models
 
 
 # region Item status and overrides
-@dataclass
-class FTItemStatus:
+class FTItemStatus(FTModel):
     """Item status class."""
 
     id: str
     status: str
-    statusText: str
-    statusFlags: list[str]
+    status_text: str = Field(alias="statusText")
+    status_flags: list[str] = Field(alias="statusFlags", default_factory=list)
 
 
 # endregion Item status and overrides
 
 
-# region Lockers models
-@dataclass
-class FTLockerCommands:
-    """FTDoor commands base class."""
-
-    open: FTItemReference
-    quarantine: FTItemReference
-    quarantineUntil: FTItemReference
-    cancelQuarantine: FTItemReference
+# region query params models
 
 
-@dataclass
-class LockerAssignment:
-    """Locker assignment class."""
+class QueryBase(FTModel):
+    """Base query params model."""
 
-    href: str
-    cardholder: FTLinkItem
-    from_: datetime | None
-    until: datetime | None
+    name: str | None = None
+    description: str | None = None
+    division: list[str] | None = None
+    sort: SortMethod | None = None
+    response_fields: list[str] | None = Field(None, alias="fields")
+    top: int | None = None
 
+    @field_serializer("division", "response_fields")
+    def _serialize_fields(self, v: list[str] | None) -> str | None:
+        """Serialize fields to comma-separated string."""
+        return ",".join(v) if v else None
+
+
+class ItemQuery(QueryBase):
+    """Item query params model."""
+
+    item_types: list[str] | None = Field(None, alias="type")
+
+    @field_serializer("item_types")
+    def _serialize_item_fields(self, v):
+        return super()._serialize_fields(v)
+
+
+class CardholderQuery(QueryBase):
+    """Cardholder query params model."""
+
+    pdfs: dict[str, str] | None = None
+    access_zones: str | list[str] | None = Field(None, alias="accessZone")
+
+    @field_validator("access_zones", mode="before")
     @classmethod
-    def from_dict(cls, kwargs: list[dict[str, Any]]) -> list[LockerAssignment]:
-        """Return FTLocker object from dict."""
-        return [
-            from_dict(
-                LockerAssignment,
-                data=assignment,
-                config=Config(type_hooks=CONVERTERS),
-            )
-            for assignment in kwargs
-        ]
+    def check_str_value(cls, value: Any) -> Any:
+        """Validate that access_zones is '*' or a list of strings."""
+        if isinstance(value, str) and value != "*":
+            raise ValueError("access_zones must be '*' or a list of strings")
+        return value
+
+    @field_serializer("access_zones")
+    def _serialize_cardholder_fields(self, v):
+        return super()._serialize_fields(v)
 
 
-@dataclass
-class FTLockerMembership:
-    """Locker membership class."""
+class CardholderChangesQuery(QueryBase):
+    """Cardholder changes query params model.
 
-    href: str | None
-    locker: FTLinkItem | None
-    from_: datetime | None = None
-    until: datetime | None = None
+    Initialize with `cardholder_fields` and/or `response_fields`.
+    On serialization (model_dump), only a combined `fields` entry is emitted,
+    and `cardholder_fields`/`response_fields` are excluded.
+    """
 
-    @property
-    def to_dic(self) -> dict[str, Any]:
-        """Return a dict from object."""
-        _dict: dict[str, Any] = {}
-        if self.href:
-            _dict["href"] = self.href
-        if self.from_:
-            _dict["from"] = f"{self.from_.isoformat()}Z"
-        if self.until:
-            _dict["until"] = f"{self.until.isoformat()}Z"
-        return _dict
+    filter: list[str] | None = None
+    cardholder_fields: list[str] | None = Field(None, exclude=True)
 
-    @classmethod
-    def add_membership(
-        cls,
-        locker: FTLocker,
-        active_from: datetime | None = None,
-        active_until: datetime | None = None,
-    ) -> FTLockerMembership:
-        """Create an FTLocker item to assign."""
-        kwargs: dict[str, Any] = {"locker": {"name": locker.name, "href": locker.href}}
-        if active_from:
-            kwargs["active_from"] = active_from
-        if active_until:
-            kwargs["active_until"] = active_until
-        return from_dict(FTLockerMembership, kwargs)
+    @model_validator(mode="after")
+    def _merge_cardholder_into_extra_fields(self) -> CardholderChangesQuery:
+        """After construction, merge cardholder_fields into response_fields.
 
-    @classmethod
-    def from_dict(cls, kwargs: list[dict[str, Any]]) -> list[FTLockerMembership]:
-        """Return FTLockerMembership object from dict."""
-        return [
-            from_dict(
-                FTLockerMembership,
-                locker,
-                config=Config(type_hooks=CONVERTERS),
-            )
-            for locker in kwargs
-        ]
+        - Prefix each cardholder field with "cardholder." to match API schema
+        - If response_fields is None, set it to the prefixed list
+        - Otherwise, append the prefixed list to existing response_fields
+        """
+        if self.cardholder_fields:
+            cardholder_fields = [f"cardholder.{f}" for f in self.cardholder_fields]
+            self.response_fields = (self.response_fields or []) + cardholder_fields
+        return self
 
 
-@dataclass
-class FTLocker:
-    """Locker class."""
+class EventQuery(QueryBase):
+    """Event filter class."""
 
-    id: str
-    href: str
-    name: str | None
-    shortName: str | None
-    description: str | None
-    division: FTItem | None
-    lockerBank: FTLinkItem | None
-    connectedController: FTItem | None
-    assignments: list[LockerAssignment] | None
-    commands: FTLockerCommands | None
+    after: datetime | None = None
+    before: datetime | None = None
+    source: list[str] | None = Field(None, description="List of source item IDs")
+    event_types: list[str] | None = Field(None, alias="type")
+    event_groups: list[str] | None = Field(None, alias="group")
+    cardholders: list[str] | None = None
+    related_items: list[str] | None = Field(None, alias="relatedItem")
+    previous: bool | None = Field(
+        None, description="Set this to true to get the events starting from the newest."
+    )
 
-    @classmethod
-    def from_list(cls, kwargs: list[dict[str, Any]]) -> list[FTLocker]:
-        """Return list of FTLocker objects from dict."""
-        return [
-            from_dict(
-                data_class=FTLocker, data=locker, config=Config(type_hooks=CONVERTERS)
-            )
-            for locker in kwargs
-        ]
-
-    @classmethod
-    def from_dict(cls, kwargs: dict[str, Any]) -> FTLocker:
-        """Return FTLocker object from dict."""
-        return from_dict(
-            data_class=FTLocker, data=kwargs, config=Config(type_hooks=CONVERTERS)
-        )
+    @field_serializer(
+        "source",
+        "event_types",
+        "event_groups",
+        "cardholders",
+        "related_items",
+    )
+    def _serialize_event_fields(self, v):
+        return super()._serialize_fields(v)
 
 
-@dataclass
-class FTLockerBank:
-    """Locker Bank class."""
+class ItemStatusQuery(QueryBase):
+    """Item status query params model."""
 
-    id: str
-    href: str
-    name: str
-    shortName: str | None
-    description: str | None
-    division: FTItem | None
-    notes: str | None
-    connectedController: FTItem | None
-    lockers: list[FTLocker] | None
-    updates: FTItemReference | None
-
-    @classmethod
-    def from_dict(cls, kwargs: dict[str, Any]) -> FTLockerBank:
-        """Return FTLockerBank object from dict."""
-        return from_dict(
-            data_class=FTLockerBank, data=kwargs, config=Config(type_hooks=CONVERTERS)
-        )
+    item_ids: list[str] | None = Field(None, alias="itemIds")
 
 
-# endregion Lockers models
-
-CONVERTERS: dict[Any, Callable[[Any], Any]] = {
-    datetime: lambda x: datetime.fromisoformat(x[:-1]).replace(tzinfo=pytz.utc),  # type: ignore[index]
-    FTAccessZoneCommands: lambda x: verify_commands(FTAccessZoneCommands, x),
-    FTAlarmZoneCommands: lambda x: verify_commands(FTAlarmZoneCommands, x),
-    FTDoorCommands: lambda x: verify_commands(FTDoorCommands, x),
-    FTInputCommands: lambda x: verify_commands(FTInputCommands, x),
-    FTOutputCommands: lambda x: verify_commands(FTOutputCommands, x),
-    FTFenceZoneCommands: lambda x: verify_commands(FTFenceZoneCommands, x),
-    FTCardholder: FTCardholder.from_dict,
-    list[dict[str, FTCardholderPdfValue]]: FTCardholderPdfValue.from_dict,
-    list[FTCardholderCard]: FTCardholderCard.from_dict,
-    list[FTAccessGroupMembership]: FTAccessGroupMembership.from_dict,
-    list[FTLocker]: FTLocker.from_list,
-    list[LockerAssignment]: LockerAssignment.from_dict,
-    FTLockerCommands: lambda x: verify_commands(FTLockerCommands, x),
-}
-
-
-def verify_commands(cls: Type[T], kwargs: dict[str, Any]) -> T | None:
-    """Verify that commands are not disabled."""
-    for commands in kwargs.values():
-        if "disabled" in commands:
-            return None
-    return from_dict(data_class=cls, data=kwargs)
-
-
-def json_serializer(value: Any) -> Any:
-    """serialize dataclass objects."""
-    if to_dict := getattr(value, "to_dict", None):
-        return to_dict
-    return value.__dict__
+# endregion query params models

@@ -1,36 +1,37 @@
 """Test Gallagher Inputs methods."""
 
-import pytest
+from typing import TYPE_CHECKING
 
 from gallagher_restapi import Client
 
 
-@pytest.mark.asyncio
 async def test_get_input(gll_client: Client) -> None:
     """Test getting an input item."""
     inputs = await gll_client.get_input()
     if inputs:
         input = await gll_client.get_input(
-            id=inputs[0].id, extra_fields=["statusFlags"]
+            id=inputs[0].id, response_fields=["statusFlags"]
         )
-        assert input[0].statusFlags == ["open"]
+        assert input[0].status_flags == ["open"]
 
 
-@pytest.mark.asyncio
 async def test_override_input(gll_client: Client) -> None:
     """Test overriding an input item."""
     if inputs := await gll_client.get_input():
         input = await gll_client.get_input(id=inputs[0].id)
-        assert input[0].name is not None
-        assert input[0].commands
+        if TYPE_CHECKING:
+            assert input[0].name is not None
+            assert input[0].commands
+            assert input[0].commands.shunt
+            assert input[0].commands.unshunt
         await gll_client.override_fence_zone(input[0].commands.shunt)
         new_input = await gll_client.get_input(
-            id=input[0].id, extra_fields=["statusFlags"]
+            id=input[0].id, response_fields=["statusFlags"]
         )
-        assert new_input[0].statusFlags == ["notPolled"]
+        assert new_input[0].status_flags == ["notPolled"]
 
         await gll_client.override_fence_zone(input[0].commands.unshunt)
         new_input = await gll_client.get_input(
-            id=input[0].id, extra_fields=["statusFlags"]
+            id=input[0].id, response_fields=["statusFlags"]
         )
-        assert new_input[0].statusFlags == ["open"]
+        assert new_input[0].status_flags == ["open"]
