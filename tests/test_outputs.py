@@ -1,36 +1,42 @@
 """Test Gallagher Outputs methods."""
 
-import pytest
+import asyncio
+from datetime import timedelta
+from typing import TYPE_CHECKING
 
 from gallagher_restapi import Client
 
 
-@pytest.mark.asyncio
 async def test_get_output(gll_client: Client) -> None:
     """Test getting an output item."""
     outputs = await gll_client.get_output(name="7000")
     if outputs:
         output = await gll_client.get_output(
-            id=outputs[0].id, extra_fields=["statusFlags"]
+            id=outputs[0].id, response_fields=["statusFlags"]
         )
-        assert output[0].statusFlags == ["controllerOffline"]
+        assert output[0].status_flags == ["controllerOffline"]
 
 
-@pytest.mark.asyncio
 async def test_override_output(gll_client: Client) -> None:
     """Test overriding an output item."""
-    if outputs := await gll_client.get_output(name="Test"):
+    if outputs := await gll_client.get_output(name="Class"):
         output = await gll_client.get_output(id=outputs[0].id)
         assert output[0].name is not None
-        assert output[0].commands
-        await gll_client.override_fence_zone(output[0].commands.on)
-        new_input = await gll_client.get_output(
-            id=output[0].id, extra_fields=["statusFlags"]
+        if TYPE_CHECKING:
+            assert output[0].commands
+            assert output[0].commands.on
+            assert output[0].commands.cancel
+        await gll_client.override_output(
+            output[0].commands.on, end_time=timedelta(seconds=5)
         )
-        assert new_input[0].statusFlags == ["closed", "overridden"]
+        new_output = await gll_client.get_output(
+            id=output[0].id, response_fields=["statusFlags"]
+        )
+        assert new_output[0].status_flags == ["closed", "overridden"]
 
-        await gll_client.override_fence_zone(output[0].commands.cancel)
-        new_input = await gll_client.get_output(
-            id=output[0].id, extra_fields=["statusFlags"]
+        await gll_client.override_output(output[0].commands.cancel)
+        await asyncio.sleep(1)
+        new_output = await gll_client.get_output(
+            id=output[0].id, response_fields=["statusFlags"]
         )
-        assert new_input[0].statusFlags == ["open"]
+        assert new_output[0].status_flags == ["open"]
