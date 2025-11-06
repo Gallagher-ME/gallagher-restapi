@@ -152,6 +152,43 @@ Retrieve Doors
    )
 
 
+
+Retrieve Inputs
+~~~~~~~~~~~~~~~
+
+.. code-block:: python
+
+   # Get all inputs
+   inputs = await client.get_input()
+   
+   # Get a specific input by ID
+   input_item = await client.get_input(id="input-id-123")
+   
+   # Filter by name, division and request additional fields
+   inputs = await client.get_input(
+       name="door sensor",
+       division=["division-id-1"],
+       response_fields=['defaults', 'statusFlags'],
+   )
+
+
+Retrieve Outputs
+~~~~~~~~~~~~~~~~
+
+.. code-block:: python
+
+   # Get all outputs
+   outputs = await client.get_output()
+   
+   # Get a specific output by ID
+   output_item = await client.get_output(id="output-id-456")
+   
+   # Filter and request control/command related fields
+   outputs = await client.get_output(
+       name="door lock",
+       response_fields=['defaults', 'commands', 'statusFlags'],
+   )
+
 Retrieve Items
 ~~~~~~~~~~~~~~
 
@@ -160,14 +197,7 @@ For item types without dedicated methods, use ``get_item()``:
 .. code-block:: python
 
    # Get divisions
-   divisions = await client.get_item(item_types=['Division'])
-   
-   # Get multiple item types
-   items = await client.get_item(
-       item_types=['Input', 'Output'],
-       name="sensor",
-       top=20
-   )
+   divisions = await client.get_item(name="Root", item_types=['Division'])
 
 
 Override Commands
@@ -190,53 +220,6 @@ Override Commands
            command_href=command.href,
            end_time=datetime.now(timezone.utc) + timedelta(hours=2)
        )
-
-
-Event Monitoring
-~~~~~~~~~~~~~~~~
-
-**EventQuery Parameters:**
-
-The ``EventQuery`` class accepts the following filter parameters:
-
-- **event_types** *(list[str], optional)*: List of event type IDs to filter by. Get available event types from ``client.event_types`` dictionary.
-- **event_groups** *(list[str], optional)*: List of event group IDs to filter by. Get available event groups from ``client.event_groups`` dictionary.
-- **source** *(list[str], optional)*: List of source item IDs (e.g., door IDs, access zone IDs).
-- **cardholders** *(list[str], optional)*: List of cardholder IDs to filter events by specific cardholders.
-- **related_items** *(list[str], optional)*: List of related item IDs.
-- **after** *(datetime, optional)*: Filter events after this timestamp.
-- **before** *(datetime, optional)*: Filter events before this timestamp.
-- **previous** *(bool, optional)*: Set to ``True`` to get events starting from the newest.
-- **top** *(int, optional)*: Maximum number of results to return.
-
-.. code-block:: python
-
-   from gallagher_restapi.models import EventQuery
-
-   # Get available event types first
-   await client.get_event_types()
-   
-   # Find specific event type IDs
-   access_granted_id = client.event_types["Door Access Granted"].id
-   
-   # Get historical events using event type IDs
-   events = await client.get_events(
-       event_filter=EventQuery(
-           event_types=[access_granted_id, '20003'],  # Use event type IDs
-           top=100
-       )
-   )
-   
-   # Monitor new events in real-time
-   async for event_batch in client.yield_new_events(
-       event_filter=EventQuery(
-           event_types=[access_granted_id],
-           source=['door-id-123'],
-           cardholders=['cardholder-id-456']
-       )
-   ):
-       for event in event_batch:
-           print(f"Event: {event.type} at {event.time}")
 
 
 Manage Cardholders
@@ -331,6 +314,52 @@ For collections like ``cards``, ``access_groups``, and ``lockers``, use the patc
    await client.remove_cardholder(
        cardholder_href="https://server/api/cardholders/456"
    )
+
+Event Monitoring
+~~~~~~~~~~~~~~~~
+
+**EventQuery Parameters:**
+
+The ``EventQuery`` class accepts the following filter parameters:
+
+- **event_types** *(list[str], optional)*: List of event type IDs to filter by. Get available event types from ``client.event_types`` dictionary.
+- **event_groups** *(list[str], optional)*: List of event group IDs to filter by. Get available event groups from ``client.event_groups`` dictionary.
+- **source** *(list[str], optional)*: List of source item IDs (e.g., door IDs, access zone IDs).
+- **cardholders** *(list[str], optional)*: List of cardholder IDs to filter events by specific cardholders.
+- **related_items** *(list[str], optional)*: List of related item IDs.
+- **after** *(datetime, optional)*: Filter events after this timestamp.
+- **before** *(datetime, optional)*: Filter events before this timestamp.
+- **previous** *(bool, optional)*: Set to ``True`` to get events starting from the newest.
+- **top** *(int, optional)*: Maximum number of results to return.
+
+.. code-block:: python
+
+   from gallagher_restapi.models import EventQuery
+
+   # Get available event types first
+   await client.get_event_types()
+   
+   # Find specific event type IDs
+   access_granted_id = client.event_types["Door Access Granted"].id
+   
+   # Get historical events using event type IDs
+   events = await client.get_events(
+       event_filter=EventQuery(
+           event_types=[access_granted_id, '20003'],  # Use event type IDs
+           top=100
+       )
+   )
+   
+   # Monitor new events in real-time
+   async for event_batch in client.yield_new_events(
+       event_filter=EventQuery(
+           event_types=[access_granted_id],
+           source=['door-id-123'],
+           cardholders=['cardholder-id-456']
+       )
+   ):
+       for event in event_batch:
+           print(f"Event: {event.type} at {event.time}")
 
 
 Monitor Alarms
