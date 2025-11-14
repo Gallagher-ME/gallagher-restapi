@@ -161,9 +161,9 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "httpx", specifier = "==0.28.1" },
-    { name = "pydantic", specifier = "==2.12.3" },
-    { name = "pytz", specifier = "==2025.2" },
+    { name = "httpx", specifier = ">=0.28.1,<1.0.0" },
+    { name = "pydantic", specifier = ">=2.12.3,<3.0.0" },
+    { name = "pytz", specifier = ">=2025.2" },
 ]
 
 [package.metadata.requires-dev]
