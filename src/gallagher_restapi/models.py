@@ -419,6 +419,7 @@ class FTAccessGroupMembership(FTModel):
     href: str | None = None
     status: FTStatus | None = None
     access_group: FTAccessGroup | None = Field(None, alias="accessGroup")
+    cardholder: FTLinkItem | None = None
     active_from: datetime | None = Field(None, alias="from")
     active_until: datetime | None = Field(None, alias="until")
 

@@ -756,6 +756,23 @@ class Client:
             models.FTAccessGroup.model_validate(item) for item in response["results"]
         ]
 
+    async def get_access_group_members(
+        self, href: str
+    ) -> list[models.FTAccessGroupMembership]:
+        """Retrieve the list of cardholders that are members of this access group.
+
+        Args:
+            href: The href to the access group members. This is the 'cardholders' field of the FTAccessGroup object.
+
+        Returns:
+            A list of FTAccessGroupMembership objects for the access group.
+        """
+        response = await self._async_request(models.HTTPMethods.GET, href)
+        return [
+            models.FTAccessGroupMembership.model_validate(item)
+            for item in response["cardholders"]
+        ]
+
     async def get_operator_group(
         self,
         *,
