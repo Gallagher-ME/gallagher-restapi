@@ -762,10 +762,10 @@ class Client:
         """Retrieve the list of cardholders that are members of this access group.
 
         Args:
-            href: The href to the access group members. this is the 'cardholders' field of the FTAccessGroup object.
+            href: The href to the access group members. This is the 'cardholders' field of the FTAccessGroup object.
 
         Returns:
-            A list of FTAccessGroupMembership objects matching the filters.
+            A list of FTAccessGroupMembership objects for the access group.
         """
         response = await self._async_request(models.HTTPMethods.GET, href)
         return [
