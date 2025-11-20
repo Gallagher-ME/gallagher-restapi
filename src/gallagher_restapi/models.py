@@ -1034,11 +1034,17 @@ class EventQuery(QueryBase):
 
     after: datetime | None = None
     before: datetime | None = None
-    source: list[str] | None = Field(None, description="List of source item IDs")
+    source: list[str] | None = Field(
+        None, description="List of source item IDs that generated the events."
+    )
     event_types: list[str] | None = Field(None, alias="type")
     event_groups: list[str] | None = Field(None, alias="group")
     cardholders: list[str] | None = None
-    related_items: list[str] | None = Field(None, alias="relatedItem")
+    related_items: list[str] | None = Field(
+        None,
+        alias="relatedItem",
+        description="Restrict events to those associated with these item IDs.",
+    )
     previous: bool | None = Field(
         None, description="Set this to true to get the events starting from the newest."
     )
