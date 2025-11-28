@@ -1022,6 +1022,8 @@ class Client:
         self,
         *,
         name: str | None = None,
+        description: str | None = None,
+        access_zones: str | list[str] | None = None,
         pdfs: dict[str, str] | None = None,
         response_fields: list[str] | None = None,
         division: list[str] | None = None,
@@ -1035,6 +1037,12 @@ class Client:
         Args:
             name: Filter by cardholder item name (substring match).
             description: Filter by cardholder item description (substring match).
+            description: Filter by cardholder item description (substring match).
+            access_zones: Filter cardholders that are currently registered inside an access zone.
+                Pass a list of access zone ids. To get the list of access zones call get_access_zone() method.
+                Pass '*' to get cardholders that registered inside any access zone.
+                Ignore it to not filter by access zones presence.
+                pass "lastSuccessfulAccessZone" in response_fields to get the name of the registered access zone.
             pdfs: Provide a dict of personal field ID or name and value to filter by personal data fields.
                 Example: {'1': 'John'} or {'EmployeeID': '12345'}
             response_fields:
@@ -1052,6 +1060,8 @@ class Client:
         """
         query = models.CardholderQuery(
             name=name,
+            description=description,
+            access_zones=access_zones,
             pdfs=pdfs,
             response_fields=response_fields,
             division=division,
