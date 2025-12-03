@@ -1226,32 +1226,33 @@ class Client:
         )
         return [models.FTEvent.model_validate(event) for event in response["events"]]
 
-    async def get_new_events(
+    async def yield_events(
         self,
         event_filter: models.EventQuery | None = None,
-        next: str | None = None,
-    ) -> tuple[list[models.FTEvent], str]:
-        """This method retrieves new events with a next link.
+    ) -> AsyncGenerator[list[models.FTEvent]]:
+        """This method yields all events based on the filter.
 
-        Poll this link to receive new events that match the specified filters. If there are none ready, the call will block until one arrives or a deadline passes.
+        This method calls the 'next' link until all events are retrieved.
 
         Args:
             event_filter: The EventQuery object containing the filter parameters.
                 The first time this method is called, provide the event_filter only.
-            next: Pass the next link href for subsequent calls to get new events.
 
         Returns:
-            A tuple of list of FTEvent objects matching the filters and the next href string.
+            A list of FTEvent objects matching the filters.
         """
-        if next is not None:
-            response = await self._async_request(models.HTTPMethods.GET, next)
-        else:
+        response = await self._async_request(
+            models.HTTPMethods.GET, self.api_features.events(), params=event_filter
+        )
+        while "next" in response:
+            _LOGGER.debug(response)
+            events = [
+                models.FTEvent.model_validate(event) for event in response["events"]
+            ]
+            yield events
             response = await self._async_request(
-                models.HTTPMethods.GET, self.api_features.events(), params=event_filter
+                models.HTTPMethods.GET, response["next"]["href"]
             )
-        events = [models.FTEvent.model_validate(event) for event in response["events"]]
-        next_href: str = response["next"]["href"]
-        return (events, next_href)
 
     async def yield_new_events(
         self, event_filter: models.EventQuery | None = None
