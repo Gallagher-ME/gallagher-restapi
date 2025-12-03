@@ -1236,22 +1236,23 @@ class Client:
 
         Args:
             event_filter: The EventQuery object containing the filter parameters.
-                The first time this method is called, provide the event_filter only.
 
-        Returns:
+        Yields:
             A list of FTEvent objects matching the filters.
         """
         response = await self._async_request(
             models.HTTPMethods.GET, self.api_features.events(), params=event_filter
         )
-        while "next" in response:
+        while True:
             _LOGGER.debug(response)
             events = [
                 models.FTEvent.model_validate(event) for event in response["events"]
             ]
             yield events
+            if not (next_link := response.get("next")):
+                break
             response = await self._async_request(
-                models.HTTPMethods.GET, response["next"]["href"]
+                models.HTTPMethods.GET, next_link["href"]
             )
 
     async def yield_new_events(
