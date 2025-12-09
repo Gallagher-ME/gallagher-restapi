@@ -1251,8 +1251,10 @@ class Client:
             if not events:
                 break
             yield events
+            if not (next_link := response.get("next")):
+                break
             response = await self._async_request(
-                models.HTTPMethods.GET, response["next"]["href"]
+                models.HTTPMethods.GET, next_link["href"]
             )
 
     async def yield_new_events(
