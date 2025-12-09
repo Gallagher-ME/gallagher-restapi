@@ -1248,11 +1248,11 @@ class Client:
             events = [
                 models.FTEvent.model_validate(event) for event in response["events"]
             ]
-            yield events
-            if not (next_link := response.get("next")):
+            if not events:
                 break
+            yield events
             response = await self._async_request(
-                models.HTTPMethods.GET, next_link["href"]
+                models.HTTPMethods.GET, response["next"]["href"]
             )
 
     async def yield_new_events(
