@@ -27,7 +27,7 @@ jobs:
           TAG_NAME="${GITHUB_REF_NAME}"
           TAG_STRIPPED=${TAG_NAME#v}
           # Extract version from pyproject.toml using uv version command
-          VERSION=$(uv version)
+          VERSION=$(uv version --short)
           if [ -z "$VERSION" ]; then
             echo '::error::Unable to determine version from pyproject.toml'
             exit 1
