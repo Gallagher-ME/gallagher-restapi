@@ -1256,7 +1256,7 @@ class Client:
             )
 
     async def yield_new_events(
-        self, event_filter: models.EventQuery | None = None, from_past=False
+        self, event_filter: models.EventQuery | None = None, from_past: bool = False
     ) -> AsyncGenerator[list[models.FTEvent]]:
         """Yield a list of new events filtered by params.
 
