@@ -14,9 +14,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Set up uv (Python 3.11)
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v7.2
         with:
           python-version: "3.11"
 
@@ -26,8 +26,8 @@ jobs:
         run: |
           TAG_NAME="${GITHUB_REF_NAME}"
           TAG_STRIPPED=${TAG_NAME#v}
-          # Extract version (supports [project] or [tool.poetry]) using Python (single-line for YAML safety)
-          VERSION=$(python -c "import tomllib,sys;d=tomllib.load(open('pyproject.toml','rb'));print((d.get('project') or {}).get('version') or d.get('tool',{}).get('poetry',{}).get('version') or '')")
+          # Extract version from pyproject.toml using uv version command
+          VERSION=$(uv version --short)
           if [ -z "$VERSION" ]; then
             echo '::error::Unable to determine version from pyproject.toml'
             exit 1
